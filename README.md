@@ -19,6 +19,8 @@ We just started working on this. Come back in 3 months or later. Sorry.
 - Bloodhound compatible data
 - Extra Stealth Mode: No `whoami` etc.
 
+(may or may not happen)
+
 ## Usage Example
 ```powershell
 $ .\privATM.ps1
