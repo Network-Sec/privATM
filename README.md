@@ -108,7 +108,7 @@ from check 1-12 to make a proper, SH / BH json file.
 
 
 SourceName : PowerShell
-Message    : Details zur Pipelineausführung für die Befehlszeile:     Write-Host "[+] Trying to collect and   
+Message    : Details zur Pipelineausführung für die Befehlszeile:     Write-Host [+] Trying to collect and   
              refere
 Path       : C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 
