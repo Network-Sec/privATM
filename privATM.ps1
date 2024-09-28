@@ -1,9 +1,55 @@
 # Debug mode variable
 $DEBUG_MODE = $false
 
+
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
+using System.DirectoryServices;
+using System.Security.Principal;
+
+public class GroupPermissionsFetcher
+{
+    public static void GetGroupPermissions()
+    {
+        WindowsIdentity currentUser = WindowsIdentity.GetCurrent();
+        Console.WriteLine("User: " + currentUser.Name);
+
+        // Get the groups the user is a member of
+        var groups = currentUser.Groups;
+
+        foreach (var group in groups)
+        {
+            try
+            {
+                // Get the underlying DirectoryEntry for the group
+                var groupDe = (DirectoryEntry)group.GetUnderlyingObject();
+                var accessRules = groupDe.ObjectSecurity.GetAccessRules(true, true, typeof(NTAccount));
+
+                Console.WriteLine("Group: " + group.Translate(typeof(NTAccount)).Value);
+                
+                foreach (ActiveDirectoryAccessRule ar in accessRules)
+                {
+                    Console.WriteLine("  Identity: " + ar.IdentityReference.ToString());
+                    Console.WriteLine("  Inherits: " + ar.InheritanceType.ToString());
+                    Console.WriteLine("  ObjectType: " + ar.ObjectType.ToString());
+                    Console.WriteLine("  InheritedObjectType: " + ar.InheritedObjectType.ToString());
+                    Console.WriteLine("  ObjectFlags: " + ar.ObjectFlags.ToString());
+                    Console.WriteLine("  AccessControlType: " + ar.AccessControlType.ToString());
+                    Console.WriteLine("  ActiveDirectoryRights: " + ar.ActiveDirectoryRights.ToString());
+                    Console.WriteLine("  IsInherited: " + ar.IsInherited.ToString());
+                    Console.WriteLine("  PropagationFlags: " + ar.PropagationFlags.ToString());
+                    Console.WriteLine("-------");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[-] Failed to retrieve permissions for group: " + group.Translate(typeof(NTAccount)).Value + ". Error: " + ex.Message);
+            }
+        }
+    }
+}
 
 public class Win32 {
     [DllImport("advapi32.dll", SetLastError = true)]
@@ -210,6 +256,9 @@ function sh_check {
     } catch {
         Write-Output "[-] Failed to collect group memberships: $_"
     }
+
+    # TODO - Try C# group permission enum
+    #    [GroupPermissionsFetcher]::GetGroupPermissions()
 
     # Collect AntiVirus Products
     try {
