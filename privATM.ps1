@@ -1,6 +1,7 @@
 # Debug mode variable
 $DEBUG_MODE = $false
 
+
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -13,7 +14,6 @@ public class Win32 {
     public static extern IntPtr GetCurrentProcess();
 }
 "@
-
 function splitStringToColumns {
     param (
         [string]$inputString
@@ -46,21 +46,6 @@ function splitStringToColumns {
     }
     return $columns
 }
-
-function Get-AccessTokenHandle {
-    [IntPtr]$tokenHandle = [IntPtr]::Zero
-    try {
-        if ([Win32]::OpenProcessToken([Win32]::GetCurrentProcess(), 0x0008, [ref]$tokenHandle)) {
-            return $tokenHandle
-        } else {
-            return [IntPtr]::Zero
-        }
-    } catch {
-        if ($DEBUG_MODE) { Write-Host "[-] Error retrieving Access Token Handle: $_" }
-        return [IntPtr]::Zero
-    }
-}
-
 function runSubprocess {
     param(
         [string]$filename,
@@ -89,7 +74,363 @@ function runSubprocess {
     # Output the result
     return $output
 }
+function Get-LocalAdminGroupName {
+    try {
+        $adminGroup = (Get-WmiObject -Class Win32_Group -Filter "SID='S-1-5-32-544'").Name
+        return $adminGroup
+    } catch {
+        Write-Host "[-] Failed to get Administrators group name: $_"
+        return $null
+    }
+}
 
+# Collect local administrators (language independent)
+function Collect-LocalAdmins {
+    # Get the local Administrators group name based on SID
+    $localAdminGroupName = Get-LocalAdminGroupName
+
+    if ($localAdminGroupName -eq $null) {
+        Write-Host "[-] Could not determine the local administrators group name."
+        return
+    }
+
+    # First attempt using Get-LocalGroupMember
+    try {
+        $localAdmins = Get-LocalGroupMember -Group $localAdminGroupName | Select-Object -ExpandProperty Name
+        $gCollect['SH_Data']['LocalAdmins'] = $localAdmins
+        Write-Host "[+] Local Admins collected using Get-LocalGroupMember"
+    } catch {
+        Write-Host "[-] Get-LocalGroupMember failed, attempting WMI method: $_"
+        
+        # Fallback to WMI method
+        try {
+            $localAdmins = Get-WmiObject -Query "ASSOCIATORS OF {Win32_Group.Domain='$env:COMPUTERNAME', Name='$localAdminGroupName'} WHERE AssocClass=Win32_GroupUser" | Select-Object -ExpandProperty Name
+            $gCollect['SH_Data']['LocalAdmins'] = $localAdmins
+            Write-Host "[+] Local Admins collected using WMI method"
+        } catch {
+            Write-Host "[-] WMI method failed: $_"
+        }
+    }
+}
+
+# Global data object
+$gCollect = @{
+    UserDetails = @{}
+    Privileges = @{}
+    Groups = @{}
+    OtherData = @{}
+}
+
+function sh_check {
+    Write-Host "[*] Starting additional SH-focused collection..." -ForegroundColor Yellow
+    Write-Host "Note: This is not intended to be run alone, but relies on data"
+    Write-Host "from check 1-12 to make a proper, SH / BH json file."
+
+    # Initialize collections if needed
+    if (-not $gCollect['SH_Data']) {
+        $gCollect['SH_Data'] = @{
+            LocalAdmins       = @{}
+            LoggedOnUsers     = @{}
+            ActiveSessions    = @{}
+            NetworkShares     = @{}
+            DomainInfo        = @{}
+            GroupMemberships   = @{}
+            GroupPolicies      = @{}
+            TokenDelegation    = @{}
+            TrustRelationships = @{}
+            SecurityPolicies   = @{}
+            AntiVirusProducts  = @{}
+            Firewalls          = @{}
+            InstalledServices   = @{}
+            SecuritySettings    = @{}
+            SystemEvents       = @{}
+        }
+    }
+
+    # Check Local Admins
+    Collect-LocalAdmins
+
+    # Check Logged-on Users
+    try {
+        $sessions = qwinsta | Select-String -Pattern '(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)' | 
+            ForEach-Object {
+                $matching = [regex]::Match($_.Line, '(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\+)')
+                [PSCustomObject]@{
+                    UserName = $matching.Groups[2].Value
+                    SessionID = $matching.Groups[4].Value
+                    State = $matching.Groups[5].Value
+                }
+            }
+        $gCollect['SH_Data']['LoggedOnUsers'] = $sessions
+        Write-Host "[+] Logged-on users collected"
+    } catch {
+        Write-Host "[-] Failed to collect logged-on users: $_"
+    }
+
+    # Check Active Sessions
+    try {
+        $activeSessions = query user | Select-String -Pattern '(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)' | 
+            ForEach-Object {
+                $matching = [regex]::Match($_.Line, '(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)')
+                [PSCustomObject]@{
+                    UserName = $matching.Groups[1].Value
+                    SessionName = $matching.Groups[2].Value
+                    ID = $matching.Groups[3].Value
+                    State = $matching.Groups[4].Value
+                    IdleTime = $matching.Groups[5].Value
+                }
+            }
+        $gCollect['SH_Data']['ActiveSessions'] = $activeSessions
+        Write-Host "[+] Active Sessions collected"
+    } catch {
+        Write-Host "[-] Failed to collect active sessions: $_"
+    }
+
+    # Enumerate Network Shares
+    try {
+        $networkShares = Get-WmiObject -Class Win32_Share | Select-Object Name, Path, Description
+        $gCollect['SH_Data']['NetworkShares'] = $networkShares
+        Write-Host "[+] Network shares collected"
+    } catch {
+        Write-Host "[-] Failed to collect network shares: $_"
+    }
+
+    # Collect Domain Information (if domain-joined)
+    $isDomainJoined = $null
+    try {
+        $isDomainJoined = (Get-WmiObject Win32_ComputerSystem).PartOfDomain
+        $gCollect['SH_Data']['DomainInfo'] = $isDomainJoined
+        Write-Host "[+] Domain information collected"
+    } catch {
+        Write-Host "[-] Failed to collect domain information: $_"
+    }
+
+    # Enumerate Group Memberships
+    try {
+        $userGroups = Get-WmiObject -Query "ASSOCIATORS OF {Win32_UserAccount.Domain='$env:USERDOMAIN',Name='$env:USERNAME'} WHERE AssocClass=Win32_GroupUser"
+        $gCollect['SH_Data']['GroupMemberships'] = $userGroups | Select-Object Name
+        Write-Host "[+] Group memberships collected"
+    } catch {
+        Write-Host "[-] Failed to collect group memberships: $_"
+    }
+
+    # Collect AntiVirus Products
+    try {
+        $securityPolicies = Get-WmiObject -Namespace "ROOT\SecurityCenter2" -Class "AntiVirusProduct" -ErrorAction Stop
+        $gCollect['SH_Data']['AntiVirusProducts'] = $securityPolicies | Select-Object -Property displayName, path, productState
+        Write-Host "[+] AntiVirus products collected via WMI"
+    } catch {
+        Write-Host "[-] Failed to collect AntiVirus products: $_"
+    }
+
+    # Collect Firewall Information
+    try {
+        $firewalls = Get-WmiObject -Namespace "ROOT\SecurityCenter2" -Class "FirewallProduct" -ErrorAction Stop
+        if ($firewalls) {
+            $gCollect['SH_Data']['Firewalls'] = $firewalls | Select-Object -Property displayName, path, productState
+            Write-Host "[+] Firewall products collected"
+        } else {
+            Write-Host "[-] No firewall products found or no output."
+        }
+    } catch {
+        Write-Host "[-] Failed to collect firewall products: $_"
+    }
+    
+
+    # Check User Rights Assignment (not using Win32_UserRight)
+    try {
+        $userRights = Get-WmiObject -Namespace "ROOT\CIMv2" -Class "Win32_UserAccount" -ErrorAction Stop | Where-Object { $_.LocalAccount -eq $true }
+        $gCollect['SH_Data']['UserRights'] = $userRights | Select-Object -Property Name, Disabled, Lockout
+        Write-Host "[+] User rights assignments collected"
+    } catch {
+        Write-Host "[-] Failed to collect user rights assignments: $_"
+    }
+
+    # Collect Installed Services
+    try {
+        $services = Get-WmiObject -Class Win32_Service -ErrorAction Stop
+        $gCollect['SH_Data']['InstalledServices'] = $services | Select-Object -Property Name, DisplayName, State, StartType
+        Write-Host "[+] Installed services collected"
+    } catch {
+        Write-Host "[-] Failed to collect installed services: $_"
+    }
+
+    # Check Group Policies applied to user
+    try {
+        if ($isDomainJoined) {
+            # For domain-joined machines
+            $groupPolicies = Get-WmiObject -Namespace "ROOT\RSOP" -Class "RSOP_PolicySetting" -ErrorAction Stop
+            $gCollect['SH_Data']['GroupPolicies'] = $groupPolicies
+            Write-Host "[+] Group policies collected for domain-joined machine"
+        } else {
+            # For standalone machines
+            Write-Host "[-] Group policies collection not applicable for standalone machine"
+        }
+    } catch {
+        Write-Host "[-] Failed to collect group policies: $_"
+    }
+
+    # Check Token Delegation
+    try {
+        $token = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        $gCollect['SH_Data']['TokenDelegation'] = @{
+            UserName = $token.Name
+            ImpersonationLevel = $token.ImpersonationLevel
+            IsAuthenticated = $token.IsAuthenticated
+        }
+        Write-Host "[+] Token delegation info collected"
+    } catch {
+        Write-Host "[-] Failed to collect token delegation info: $_"
+    }
+
+    # Enumerate Trust Relationships
+    try {
+        if ($isDomainJoined) {
+            $trustRelationships = Get-WmiObject -Namespace "ROOT\Microsoft\Windows\ActiveDirectory" -Class "TrustRelationship" -ErrorAction Stop
+            $gCollect['SH_Data']['TrustRelationships'] = $trustRelationships
+            Write-Host "[+] Trust relationships collected for domain-joined machine"
+        } else {
+            Write-Host "[-] Trust relationships not applicable for standalone machine"
+        }
+    } catch {
+        Write-Host "[-] Failed to collect trust relationships: $_"
+    }
+
+    # Collect System Events with a limit of the last 200 entries
+    Write-Host "[+] Trying to collect and reference latest 200 Events, may take a minute..."
+    try {
+        $events = Get-WmiObject -Namespace "ROOT\CIMv2" -Class "Win32_NTLogEvent" -ErrorAction Stop | 
+                Sort-Object TimeGenerated -Descending | 
+                Select-Object -First 200
+        
+        $gCollect['SH_Data']['SystemEvents'] = @()
+
+        foreach ($event in $events) {
+            # Initialize an empty hashtable to store event details
+            $eventDetails = @{
+                LogFile      = $event.LogFile
+                EventCode    = $event.EventCode
+                EventType    = $event.EventType
+                SourceName   = $event.SourceName
+                Message      = $event.Message
+                TimeGenerated = $event.TimeGenerated
+                Path         = $null # Placeholder for path
+            }
+
+            # Try to get the path from Win32_Service
+            $service = Get-WmiObject -Class Win32_Service -Filter "Name='$($event.SourceName)'" -ErrorAction SilentlyContinue
+            if ($service) {
+                $eventDetails.Path = $service.PathName -replace '"', '' # Clean quotes
+            } else {
+                # If not found in services, try Win32_Process
+                $process = Get-WmiObject -Class Win32_Process -Filter "Name='$($event.SourceName).exe'" -ErrorAction SilentlyContinue
+                if ($process) {
+                    $eventDetails.Path = $process.ExecutablePath
+                }
+            }
+
+            # Add event details to the collection
+            $gCollect['SH_Data']['SystemEvents'] += $eventDetails
+        }
+    } catch {
+        Write-Host "[-] Failed to collect system events: $_"
+    }
+
+    try {
+        Write-Host "[+] Last 200 system events collected with paths resolution, example:"
+        $firstEvent = $gCollect['SH_Data']['SystemEvents'][0]
+        $formattedEvent = [PSCustomObject]@{
+            SourceName    = $firstEvent.SourceName
+            Message       = $firstEvent.Message[0..100] -join ''
+            Path          = $firstEvent.Path[0]
+        } 
+        Write-Output $formattedEvent | Format-List
+    } catch {
+        Write-Host "[-] Failed to display system event example"
+    }
+
+
+    Write-Host "[*] Finished SH-focused data collection."
+}
+
+function sh_translate {
+    # Initialize Transformed object
+    $gCollect['Transformed'] = @{
+        "nodes" = @()
+    }
+
+    # Transform UserDetails to nodes
+    if ($gCollect['UserDetails']) {
+        $userNode = @{
+            "objectid" = $gCollect['UserDetails']['SID'] # Using SID as a unique identifier
+            "name" = $gCollect['UserDetails']['FullName']
+            "type" = "user"
+            "isGuest" = $gCollect['UserDetails']['IsGuest']
+        }
+        $gCollect['Transformed']['nodes'] += $userNode
+    }
+
+    # Transform Groups
+    if ($gCollect['Groups']) {
+        foreach ($group in $gCollect['Groups']['UserGroups']) {
+            $node = @{
+                "objectid" = $group.Name # Ensure this is unique
+                "name" = $group.Name
+                "type" = "group"
+            }
+            $gCollect['Transformed']['nodes'] += $node
+        }
+    }
+
+    # Transform Privileges
+    if ($gCollect['Privileges']) {
+        foreach ($privilege in $gCollect['Privileges']) {
+            $node = @{
+                "objectid" = "$($privilege.UserName)_$($privilege.Privilege)" # Unique identifier
+                "name" = $privilege.Privilege
+                "type" = "privilege"
+                "user" = $privilege.UserName
+            }
+            $gCollect['Transformed']['nodes'] += $node
+        }
+    }
+
+    # Note: Skip edges for now since BloodHound will construct those from nodes.
+}
+function sh_store {
+    # Store the transformed data to disk or send it somewhere
+    $storagePath = "C:\Temp\stealth_data.json"
+    
+    $jsonData = $gCollect['Transformed'] | ConvertTo-Json -Depth 3
+    Set-Content -Path $storagePath -Value $jsonData
+
+    Write-Host "[+] Data stored at $storagePath."
+    if ($DEBUG_MODE) {
+        Write-Host "[+] Global Object Data: " -ForegroundColor Yellow
+        $gCollect | ConvertTo-Json -Depth 3 | Write-Host
+    }
+}
+function run_SH_collection {
+    # some further checks / data collection not covered by other checks
+    sh_check
+
+    # translation and storage of ALL collected data
+    sh_translate
+    sh_store
+}
+function Get-AccessTokenHandle {
+    [IntPtr]$tokenHandle = [IntPtr]::Zero
+    try {
+        if ([Win32]::OpenProcessToken([Win32]::GetCurrentProcess(), 0x0008, [ref]$tokenHandle)) {
+            return $tokenHandle
+        } else {
+            return [IntPtr]::Zero
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Host "[-] Error retrieving Access Token Handle: $_" }
+        return [IntPtr]::Zero
+    }
+}
 function checkSeImpersonatePrivilege {
     if ($DEBUG_MODE) { Write-Host "Checking for SeImpersonatePrivilege..." }
 
@@ -197,6 +538,35 @@ function checkSeImpersonatePrivilege {
         }
     } catch {
         if ($DEBUG_MODE) { Write-Host "[-] Error checking SeImpersonatePrivilege: $_" }
+    }
+
+    # Add data to global object for SH
+    $gCollect['Privileges'] += @{  
+        "Privilege" = "SeImpersonatePrivilege"  
+        "UserName"  = $userName
+        "HasPrivilege" = $hasImpersonatePrivilege
+        "UserPrivileges" = $filteredOutput  
+    }
+
+    $gCollect['Groups'] += @{
+        "UserGroups" = $userGroups
+    }
+
+    $gCollect['UserDetails'] += @{
+        "Name"                = $userName
+        "AuthenticationType"  = $userAccount.AuthenticationType
+        "ImpersonationLevel"  = $userAccount.ImpersonationLevel
+        "IsAuthenticated"     = $userAccount.IsAuthenticated
+        "IsGuest"             = $userAccount.IsGuest
+        "IsSystem"            = $userAccount.IsSystem
+        "IsAnonymous"         = $userAccount.IsAnonymous
+        "Token"               = $userAccount.Token
+        "TokenHandle"         = $userAccount.TokenHandle
+        "LocalAccount"        = $userAccount.LocalAccount
+        "Disabled"            = $userAccount.Disabled
+        "Lockout"             = $userAccount.Lockout
+        "SID"                 = $userAccount.SID
+        "FullName"            = $userAccount.FullName
     }
 
     return $hasImpersonatePrivilege
@@ -351,6 +721,7 @@ function showMenu {
     $techniques[10] = "COM Object Abuse"
     $techniques[11] = "DCOM Lateral Movement"
     $techniques[12] = "Exploiting Weak EFS Settings"
+    $techniques[13] = "Run additional checks for SH collection"
 
     # Prepare an array to hold the formatted output
     $output = @()
@@ -388,9 +759,10 @@ function processInput {
 
     $scanOnly = $false
     $tryAll = $false
-    
+    $optionCount = 13
+
     if ($cliInput -eq 'a') {
-        return @{ Selections = 1..12; ScanOnly = $scanOnly; TryAll = $tryAll }
+        return @{ Selections = 1..$optionCount; ScanOnly = $scanOnly; TryAll = $tryAll }
     } elseif ($cliInput -like 's*') {
         $cliInput = $cliInput.Substring(1)  # Remove 's' prefix for scanning only
         $scanOnly = $true
@@ -416,7 +788,7 @@ function processInput {
         } elseif ($item -match '^\d+$') {
             # Handle single numbers (1-12)
             $num = [int]$item
-            if ($num -ge 1 -and $num -le 12) {
+            if ($num -ge 1 -and $num -le $optionCount) {
                 $parsedInput += $num
             } else {
                 if ($DEBUG_MODE) { Write-Host "Invalid selection: $item" }
@@ -466,6 +838,7 @@ function main {
             10 { checkCOMObjectAbuse; if (-not $scanOnly) { tryCOMObjectAbuse } }
             11 { checkDCOMLateralMovement; if (-not $scanOnly) { tryDCOMLateralMovement } }
             12 { checkEFSSettings; if (-not $scanOnly) { tryEFSSettings } }
+            13 { run_SH_collection; }
             default { Write-Host "Invalid selection: $selection" }
         }
     }
