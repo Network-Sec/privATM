@@ -109,7 +109,7 @@ Your selection: 2
 ## Bloodhound Data Collection
 We started working on data collection for Bloodhound ingestion. Because Sharphound is heavily flagged (including the reflective powershell loader), we're trying to incorporate a **light / stealth** enum for similar data - not sure if we can achieve compatibility in the end, but we'll keep working on it, or provide our own frontend.
 
-We consider `privileges` (also 2nd hand, through a group or machine) as rather **well-known** and usually easy path, that Pentesters should quickly recognize. So we may resort towards a rather quick print-out in bright-green colour, if it becomes too complicated to implement.
+We consider `privileges` (also 2nd hand, through a group or machine) as rather **well-known** and usually easy path, that Pentesters should quickly recognize (if they can be enumerated that is). So we may resort towards a rather quick print-out in bright-green colour, if it becomes too complicated to implement.
 
 ```powershell
 Your selection: 13
