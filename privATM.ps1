@@ -11,56 +11,44 @@ using System.Security.Principal;
 using System.Collections;
 using System.Text;
 
-public class GroupDetailsFetcher
-{
-    public static void GetGroupDetails(string groupName)
-    {
-        try
-        {
-            using (DirectoryEntry groupEntry = new DirectoryEntry("WinNT://{Environment.MachineName}/{groupName},group"))
-            {
-                // Display basic group information
-                Console.WriteLine("Group Name: {groupEntry.Name}");
-                Console.WriteLine("Description: {groupEntry.Properties["Description"].Value}");
-                
-                // Display privileges (if applicable)
-                foreach (string privilege in groupEntry.Properties["Privileges"])
-                {
-                    Console.WriteLine("Privilege: {privilege}");
-                }
-
-                // List members of the group
-                var members = (IEnumerable)groupEntry.Invoke("Members");
-                Console.WriteLine("Members:");
-                foreach (var member in members)
-                {
-                    using (var memberEntry = new DirectoryEntry(member))
-                    {
-                        Console.WriteLine(" - {memberEntry.Name}");
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Error fetching group details: {ex.Message}");
-        }
-    }
-
-}
-
-class PrivilegeFetcher
+public class PrivilegeFetcher
 {
     [DllImport("advapi32.dll", SetLastError = true)]
-    static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+    public static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    static extern IntPtr GetCurrentProcess();
+    public static extern IntPtr GetCurrentProcess();
 
     [DllImport("advapi32.dll", SetLastError = true)]
-    static extern bool GetTokenInformation(IntPtr TokenHandle, int TokenInformationClass, IntPtr TokenInformation, int TokenInformationLength, out int ReturnLength);
+    public static extern bool GetTokenInformation(IntPtr TokenHandle, int TokenInformationClass, IntPtr TokenInformation, int TokenInformationLength, out int ReturnLength);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    public static extern bool LookupPrivilegeName(string lpSystemName, ref LUID lpLuid, System.Text.StringBuilder lpName, ref int cchName);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LUID
+    {
+        public uint LowPart;
+        public int HighPart;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LUID_AND_ATTRIBUTES
+    {
+        public LUID Luid;
+        public uint Attributes;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct TOKEN_PRIVILEGES
+    {
+        public uint PrivilegeCount;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 1)]
+        public LUID_AND_ATTRIBUTES[] Privileges;
+    }
 
     const int TokenPrivileges = 3; // TokenPrivileges enum
+    const uint SE_PRIVILEGE_ENABLED = 0x00000002;
 
     public static void FetchPrivileges()
     {
@@ -76,14 +64,43 @@ class PrivilegeFetcher
             IntPtr tokenInfo = Marshal.AllocHGlobal(tokenInfoLength);
             if (GetTokenInformation(tokenHandle, TokenPrivileges, tokenInfo, tokenInfoLength, out tokenInfoLength))
             {
-                // Parse and enumerate privileges here
-                Console.WriteLine("Privileges fetched successfully.");
+                // First, read the privilege count
+                uint privilegeCount = (uint)Marshal.ReadInt32(tokenInfo);
+
+                // Offset to start reading privileges
+                IntPtr privilegesPtr = new IntPtr(tokenInfo.ToInt64() + sizeof(uint));
+
+                for (int i = 0; i < privilegeCount; i++)
+                {
+                    LUID_AND_ATTRIBUTES luidAndAttributes = (LUID_AND_ATTRIBUTES)Marshal.PtrToStructure(privilegesPtr, typeof(LUID_AND_ATTRIBUTES));
+                    LUID luid = luidAndAttributes.Luid;
+
+                    // Lookup privilege name
+                    System.Text.StringBuilder privilegeName = new System.Text.StringBuilder(256);
+                    int nameLength = privilegeName.Capacity;
+                    if (LookupPrivilegeName(null, ref luid, privilegeName, ref nameLength))
+                    {
+                        string name = privilegeName.ToString();
+                        bool isEnabled = (luidAndAttributes.Attributes & SE_PRIVILEGE_ENABLED) == SE_PRIVILEGE_ENABLED;
+                        Console.WriteLine("Privilege: {0}, Enabled: {1}", name, isEnabled);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Failed to lookup privilege name.");
+                    }
+
+                    // Move the pointer to the next privilege
+                    privilegesPtr = new IntPtr(privilegesPtr.ToInt64() + Marshal.SizeOf(typeof(LUID_AND_ATTRIBUTES)));
+                }
             }
             Marshal.FreeHGlobal(tokenInfo);
         }
+        else
+        {
+            Console.WriteLine("Failed to open process token.");
+        }
     }
 }
-
 
 public class PrivilegeFetcher2
 {
@@ -258,49 +275,6 @@ public class PrivilegeFetcher2
         }
 
         return sid;
-    }
-}
-
-// Classic Approach, may work on AD Joined as-is, untested due to lack of access to AD
-public class GroupPermissionsFetcher
-{
-    public static void GetGroupPermissions()
-    {
-        WindowsIdentity currentUser = WindowsIdentity.GetCurrent();
-        Console.WriteLine("User: " + currentUser.Name);
-
-        // Get the groups the user is a member of
-        var groups = currentUser.Groups;
-
-        foreach (var group in groups)
-        {
-            try
-            {
-                // Get the underlying DirectoryEntry for the group
-                var groupDe = (DirectoryEntry)group.GetUnderlyingObject();
-                var accessRules = groupDe.ObjectSecurity.GetAccessRules(true, true, typeof(NTAccount));
-
-                Console.WriteLine("Group: " + group.Translate(typeof(NTAccount)).Value);
-                
-                foreach (ActiveDirectoryAccessRule ar in accessRules)
-                {
-                    Console.WriteLine("  Identity: " + ar.IdentityReference.ToString());
-                    Console.WriteLine("  Inherits: " + ar.InheritanceType.ToString());
-                    Console.WriteLine("  ObjectType: " + ar.ObjectType.ToString());
-                    Console.WriteLine("  InheritedObjectType: " + ar.InheritedObjectType.ToString());
-                    Console.WriteLine("  ObjectFlags: " + ar.ObjectFlags.ToString());
-                    Console.WriteLine("  AccessControlType: " + ar.AccessControlType.ToString());
-                    Console.WriteLine("  ActiveDirectoryRights: " + ar.ActiveDirectoryRights.ToString());
-                    Console.WriteLine("  IsInherited: " + ar.IsInherited.ToString());
-                    Console.WriteLine("  PropagationFlags: " + ar.PropagationFlags.ToString());
-                    Console.WriteLine("-------");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[-] Failed to retrieve permissions for group: " + group.Translate(typeof(NTAccount)).Value + ". Error: " + ex.Message);
-            }
-        }
     }
 }
 
