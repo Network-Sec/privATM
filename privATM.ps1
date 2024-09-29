@@ -452,7 +452,7 @@ function sh_check {
     Write-Output "Note: This is not intended to be run alone, but relies on data"
     Write-Output "from check 1-12 to make a proper, SH / BH json file."
     Write-Output " "
-    
+
     # Initialize collections if needed
     if (-not $gCollect['SH_Data']) {
         $gCollect['SH_Data'] = @{
@@ -563,6 +563,33 @@ function sh_check {
         }
     } catch {
         Write-Output "[-] Failed to collect firewall products: $_"
+    }
+
+    # Get Named Pipes
+    try {
+        $namedPipes = [System.IO.Directory]::GetFiles("\\.\\pipe\\")
+        if ($namedPipes) {
+            Write-Output "[+] Collected Named Pipes, 10 examples"
+            Write-Output $namedPipes | Select-Object -First 10
+        }
+        else {
+            Write-Output "[-] Failed to collect Named Pipes"
+        }
+    } catch { 
+        Write-Output "[-] Failed to collect Named Pipes with error"
+    }
+
+    # Get Full Powershell History
+    try {
+        $powershellHistory = type (Get-PSReadLineOption).HistorySavePath
+        if ($powershellHistory) {
+            Write-Output "[+] Collected Full Powershell History"
+        }
+        else {
+            Write-Output "[-] Failed to collect Full Powershell History"
+        }
+    } catch { 
+        Write-Output "[-] Failed to collect Full Powershell History with error"
     }
 
     # Check User Rights Assignment (not using Win32_UserRight)
@@ -914,11 +941,39 @@ function tryUserRightsAssignments {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via User Rights Assignments..." }
     # Logic for exploiting User Rights Assignments
 }
-
 function checkServiceMisconfigurations {
     if ($DEBUG_MODE) { Write-Output "Checking for Service Misconfigurations..." }
-    # Logic for checking service misconfigurations
+    
+    $writeableEnvPath = @{
+        "Path"         = @()
+        "Permissions"  = @()
+    }
+
+    Write-Host "[*] Trying to find writable env-path before System32..."
+    $env:Path -split ";" | ForEach-Object {
+        try {
+            # Attempt to create a temporary file in the current path
+            echo "test" > "$_\t"
+
+            if ($?) {
+                # If the file creation was successful, add to the writable paths
+                $writeableEnvPath["Path"] += $_
+                Write-Output "[+] Potentially writable path before System32 found: $_"
+                $writeableEnvPath["Permissions"] += icacls.exe $_ 
+                Remove-Item "$_\t" -ErrorAction SilentlyContinue 
+            }             
+            if ($_.ToLower() -eq "c:\windows\system32") {
+                # Exit the loop if we reach the System32 path
+                return
+            }
+        }
+        catch { 
+            #Write-Output "[!] Error accessing $_" 
+        }
+    }
+
 }
+
 
 function tryServiceMisconfigurations {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Service Misconfigurations..." }
