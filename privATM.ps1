@@ -571,7 +571,7 @@ function sh_check {
     try {
         $namedPipes = [System.IO.Directory]::GetFiles("\\.\\pipe\\")
         if ($namedPipes) {
-            Write-Output "[+] Collected Named Pipes, 10 examples"
+            Write-Output "[+] Collected Named Pipes"
             if ($DEBUG_MODE) {
                  Write-Output $namedPipes | Select-Object -First 10
             }
