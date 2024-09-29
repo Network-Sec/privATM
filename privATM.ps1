@@ -570,7 +570,9 @@ function sh_check {
         $namedPipes = [System.IO.Directory]::GetFiles("\\.\\pipe\\")
         if ($namedPipes) {
             Write-Output "[+] Collected Named Pipes, 10 examples"
-            Write-Output $namedPipes | Select-Object -First 10
+            if ($DEBUG_MODE) {
+                 Write-Output $namedPipes | Select-Object -First 10
+            }
         }
         else {
             Write-Output "[-] Failed to collect Named Pipes"
