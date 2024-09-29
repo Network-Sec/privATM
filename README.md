@@ -80,6 +80,32 @@ TokenHandle: 7528
 [-] :( DESKTOP-EXAMPLE\username does NOT have SeImpersonatePrivilege.
 ```
 
+```powershell
+$ .\privATM.ps1
+
+Technique
+---------                           -------------------------------------------
+1. SeImpersonatePrivilege           8. Autorun Program Abuse
+2. Service Misconfigurations        9. Insecure GPO Permissions
+3. Scheduled Tasks                  10. COM Object Abuse
+4. WMI Event Subscription Abuse     11. DCOM Lateral Movement
+5. Token Impersonation/Manipulation 12. Exploiting Weak EFS Settings
+6. Registry Key Abuse               13. Run additional checks for SH collection
+7. CVE-2021-36934 (SAM Hive Access)
+
+a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
+
+Enter number(s) (e.g., 1,5-7,9) or 'a' for all...
+
+Your selection: 2
+[*] Trying to find writable env-path before System32...
+[+] E:\Program Files (x86)\IncrediBuild
+[+] C:\NASM
+[+] D:\AI-Tools\Ollama
+[+] D:\AI-Tools\ComfyUI_windows_portable\piper-phonemize\lib
+[+] .
+```
+
 ## Bloodhound Data Collection
 We started working on data collection for Bloodhound ingestion. Because Sharphound is heavily flagged (including the reflective powershell loader), we're trying to incorporate a **light / stealth** enum for similar data - not sure if we can achieve compatibility in the end, but we'll keep working on it, or provide our own frontend.
 
