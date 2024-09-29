@@ -355,6 +355,8 @@ function Get-LocalAdminGroupName {
         return $null
     }
 }
+
+# This is intended to get at least some info when no LDAP is present (non AD machine)
 function Get-AllLocalGroupsInfo {
     # Get the local computer entry
     $localComputer = New-Object System.DirectoryServices.DirectoryEntry("WinNT://$($env:COMPUTERNAME),computer")
@@ -392,9 +394,7 @@ function Get-AllLocalGroupsInfo {
                 $privileges = $groupEntry.Properties["Privileges"].Value
                 if ($privileges -ne $null) {
                     $groupDetails.Privileges = $privileges
-                } else {
-                    $groupDetails.Privileges = "No privileges found."
-                }
+                } 
             } catch {
                 Write-Error "Error retrieving privileges for group '$($groupEntry.Name)': $_"
             }
@@ -537,7 +537,7 @@ function sh_check {
     # TODO - Try C# group permission enum
     Write-Output "[*] Trying to get Group infos (limited on non-AD machines)"
     $allGroupInfo = Get-AllLocalGroupsInfo
-    Write-Output $allGroupInfo | Format-Table -AutoSize
+    Write-Output $allGroupInfo | Select-Object -Property Name, Description, Members | Format-Table -AutoSize
 
     # Collect AntiVirus Products
     try {
@@ -575,8 +575,8 @@ function sh_check {
     try {
         $services = Get-WmiObject -Class Win32_Service -ErrorAction Stop
         $gCollect['SH_Data']['InstalledServices'] = $services
-        Write-Output "[+] Installed services collected"
-        Write-Output $services | Select-Object -Property Name, State, StartMode | Format-Table -AutoSize
+        Write-Output "[+] Installed services collected, showing first 20"
+        Write-Output $services | Select-Object -First 20 | Select-Object -Property Name, State, StartMode | Format-Table -AutoSize
         # We could check for Desktop or Shell and then use proper windows to display long list stuff
         # Write-Output $services | Select-Object -Property Name, State, StartMode | Out-GridView -Title "Installed Services" -PassThru
     } catch {
