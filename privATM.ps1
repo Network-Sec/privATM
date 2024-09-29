@@ -958,7 +958,7 @@ function checkServiceMisconfigurations {
             if ($?) {
                 # If the file creation was successful, add to the writable paths
                 $writeableEnvPath["Path"] += $_
-                Write-Output "[+] Potentially writable path before System32 found: $_"
+                Write-Output "[+] $_"
                 $writeableEnvPath["Permissions"] += icacls.exe $_ 
                 Remove-Item "$_\t" -ErrorAction SilentlyContinue 
             }             
