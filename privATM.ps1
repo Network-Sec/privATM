@@ -446,7 +446,7 @@ $gCollect = @{
 }
 
 function sh_check {
-    Write-Output "[*] Starting additional SH-focused collection..." -ForegroundColor Yellow
+    Write-Output "[*] Starting additional SH-focused collection..." 
     Write-Output "Note: This is not intended to be run alone, but relies on data"
     Write-Output "from check 1-12 to make a proper, SH / BH json file."
 
@@ -734,7 +734,7 @@ function sh_store {
 
     Write-Output "[+] Data stored at $storagePath."
     if ($DEBUG_MODE) {
-        Write-Output "[+] Global Object Data: " -ForegroundColor Yellow
+        Write-Output "[+] Global Object Data: " 
         $gCollect | ConvertTo-Json -Depth 3 | Write-Output
     }
 }
@@ -766,11 +766,11 @@ function checkSeImpersonatePrivilege {
     $user = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     $userName = $user.Name
 
-    Write-Output "[+] Current User: $userName" -ForegroundColor Yellow
+    Write-Output "[+] Current User: $userName" 
     Write-Output ""
 
     # Easy way
-    Write-Output "[*] Enumerating User Privileges:" -ForegroundColor Green
+    Write-Output "[*] Enumerating User Privileges:" 
     $whoamiPriv = runSubprocess "whoami" "/priv"
     # $whoamiGroups = runSubprocess "whoami" "/groups"
 
@@ -779,7 +779,7 @@ function checkSeImpersonatePrivilege {
     $filteredOutput = $lines[6..$lines.Length] -join "`n"
     Write-Output $filteredOutput 
 
-    Write-Output "[*] Enumerating User Groups:" -ForegroundColor Cyan
+    Write-Output "[*] Enumerating User Groups:" 
     $userGroups = Get-WmiObject -Query "ASSOCIATORS OF {Win32_UserAccount.Domain='$env:USERDOMAIN',Name='$env:USERNAME'} WHERE AssocClass=Win32_GroupUser" |  Select-Object -ExpandProperty Name 
     $userGroups.foreach({ Write-Output "$_" })
     Write-Output ""
@@ -860,9 +860,9 @@ function checkSeImpersonatePrivilege {
         }
 
         if ($hasImpersonatePrivilege) {
-            Write-Output "[!] :) $userName has SeImpersonatePrivilege." -ForegroundColor Green
+            Write-Output "[!] :) $userName has SeImpersonatePrivilege." 
         } else {
-            Write-Output "[-] :( $userName does NOT have SeImpersonatePrivilege." -ForegroundColor Red
+            Write-Output "[-] :( $userName does NOT have SeImpersonatePrivilege." 
         }
     } catch {
         if ($DEBUG_MODE) { Write-Output "[-] Error checking SeImpersonatePrivilege: $_" }
