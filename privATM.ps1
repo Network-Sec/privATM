@@ -424,6 +424,7 @@ function collect_LAs {
         $gCollect['SH_Data']['LocalAdmins'] = $localAdmins
         Write-Output "[+] Local Admins collected using Get-LocalGroupMember"
         Write-Output $localAdmins
+        Write-Output ""
     } catch {
         Write-Output "[-] Get-LocalGroupMember failed, attempting WMI method: $_"
         
@@ -433,6 +434,7 @@ function collect_LAs {
             $gCollect['SH_Data']['LocalAdmins'] = $localAdmins
             Write-Output "[+] Local Admins collected using WMI method"
             Write-Output $localAdmins
+            Write-Output ""
         } catch {
             Write-Output "[-] WMI method failed: $_"
         }
@@ -599,7 +601,7 @@ function sh_check {
         $userRights = Get-WmiObject -Namespace "ROOT\CIMv2" -Class "Win32_UserAccount" -ErrorAction Stop | Where-Object { $_.LocalAccount -eq $true }
         $gCollect['SH_Data']['UserRights'] = $userRights 
         Write-Output "[+] User rights assignments collected"
-        Write-Output $userRights | Select-Object -Property Name, Lockout
+        Write-Output $userRights |  Select-Object -Property Name, FullName, Domain, SID |  Format-Table -AutoSize
     } catch {
         Write-Output "[-] Failed to collect user rights assignments: $_"
     }
