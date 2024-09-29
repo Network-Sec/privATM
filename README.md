@@ -1,7 +1,7 @@
 # privATM
 Yet Another PrivEsc &amp; User Enum Script
 
-We started working on a script, that can used on real systems, focussing on things that:
+We started working on a script, that can be used on real systems, focussing on things that:
 - Still work > 2024
 - Can be exploited in pure `Powershell` / `C#` code - so your AMSI evaded shell won't suck as hard
 - Doesn't take forever to run
