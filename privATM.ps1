@@ -1,6 +1,7 @@
+Add-Type -AssemblyName System.DirectoryServices
+
 # Debug mode variable
 $DEBUG_MODE = $false
-
 
 Add-Type @"
 using System;
@@ -8,140 +9,208 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.DirectoryServices;
 using System.Security.Principal;
+using System.Collections;
 using System.Text;
 
-// Some shots in the dark without having researched anything about this topic
-// to - probably not - but maybe get group privs on non-domain-joined machines
-
-// Version that doesn't crash but doesn't produce anything
-public class PrivilegeFetcher
+public class GroupDetailsFetcher
 {
-    const int TokenPrivileges = 20; // TokenPrivileges information class
-    const int TokenQuery = 0x0008; // TOKEN_QUERY access
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    public static extern bool GetTokenInformation(IntPtr hToken, int tokenInfoClass,
-        IntPtr pTokenInfo, int tokenInfoLength, ref int returnLength);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    public static extern bool LookupPrivilegeName(string lpSystemName, ref LUID lpLuid,
-        StringBuilder lpName, ref int cchName);
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct TOKEN_PRIVILEGES
+    public static void GetGroupDetails(string groupName)
     {
-        public int PrivilegeCount;
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 1)]
-        public LUID_AND_ATTRIBUTES[] Privileges;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct LUID_AND_ATTRIBUTES
-    {
-        public LUID Luid;
-        public int Attributes;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct LUID
-    {
-        public uint LowPart;
-        public int HighPart;
-    }
-
-    public static List<string> GetUserPrivileges()
-    {
-        var output = new List<string>();
-        WindowsIdentity currentUser = WindowsIdentity.GetCurrent();
-        output.Add("User: " + currentUser.Name);
-
-        // Open the current process token to retrieve privileges
-        IntPtr tokenHandle;
-        if (OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, TokenQuery, out tokenHandle))
+        try
         {
-            TOKEN_PRIVILEGES tokenPrivileges = new TOKEN_PRIVILEGES();
-            int tokenPrivilegesLength = Marshal.SizeOf(typeof(TOKEN_PRIVILEGES));
-            IntPtr tokenPrivilegesPtr = Marshal.AllocHGlobal(tokenPrivilegesLength);
-
-            try
+            using (DirectoryEntry groupEntry = new DirectoryEntry("WinNT://{Environment.MachineName}/{groupName},group"))
             {
-                int returnLength = 0;
-                if (GetTokenInformation(tokenHandle, TokenPrivileges, tokenPrivilegesPtr, tokenPrivilegesLength, ref returnLength))
+                // Display basic group information
+                Console.WriteLine("Group Name: {groupEntry.Name}");
+                Console.WriteLine("Description: {groupEntry.Properties["Description"].Value}");
+                
+                // Display privileges (if applicable)
+                foreach (string privilege in groupEntry.Properties["Privileges"])
                 {
-                    tokenPrivileges = Marshal.PtrToStructure<TOKEN_PRIVILEGES>(tokenPrivilegesPtr);
-                    for (int i = 0; i < tokenPrivileges.PrivilegeCount; i++)
+                    Console.WriteLine("Privilege: {privilege}");
+                }
+
+                // List members of the group
+                var members = (IEnumerable)groupEntry.Invoke("Members");
+                Console.WriteLine("Members:");
+                foreach (var member in members)
+                {
+                    using (var memberEntry = new DirectoryEntry(member))
                     {
-                        var privilege = tokenPrivileges.Privileges[i].Luid;
-                        string privilegeName = LookupPrivilegeName(privilege);
-                        output.Add("  - Privilege: " + privilegeName);
+                        Console.WriteLine(" - {memberEntry.Name}");
                     }
                 }
-                else
-                {
-                    output.Add("[-] Failed to retrieve token privileges.");
-                }
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(tokenPrivilegesPtr);
             }
         }
-        else
+        catch (Exception ex)
         {
-            output.Add("[-] Failed to open process token.");
+            Console.WriteLine("Error fetching group details: {ex.Message}");
         }
-
-        return output;
     }
 
-    private static string LookupPrivilegeName(LUID luid)
+}
+
+class PrivilegeFetcher
+{
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr GetCurrentProcess();
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool GetTokenInformation(IntPtr TokenHandle, int TokenInformationClass, IntPtr TokenInformation, int TokenInformationLength, out int ReturnLength);
+
+    const int TokenPrivileges = 3; // TokenPrivileges enum
+
+    public static void FetchPrivileges()
     {
-        StringBuilder privilegeName = new StringBuilder(256);
-        int nameSize = privilegeName.Capacity;
+        IntPtr processHandle = GetCurrentProcess();
+        IntPtr tokenHandle;
 
-        if (LookupPrivilegeName(null, ref luid, privilegeName, ref nameSize))
+        if (OpenProcessToken(processHandle, 0x0008, out tokenHandle)) // TOKEN_QUERY
         {
-            return privilegeName.ToString();
-        }
+            // Get token privileges
+            int tokenInfoLength = 0;
+            GetTokenInformation(tokenHandle, TokenPrivileges, IntPtr.Zero, 0, out tokenInfoLength);
 
-        return "Failed to translate LUID: " + luid.LowPart;
+            IntPtr tokenInfo = Marshal.AllocHGlobal(tokenInfoLength);
+            if (GetTokenInformation(tokenHandle, TokenPrivileges, tokenInfo, tokenInfoLength, out tokenInfoLength))
+            {
+                // Parse and enumerate privileges here
+                Console.WriteLine("Privileges fetched successfully.");
+            }
+            Marshal.FreeHGlobal(tokenInfo);
+        }
     }
 }
 
-// Went more low-level but ATM crashes, wrong pointer address
-public class LowLevelPrivilegeFetcher
+
+public class PrivilegeFetcher2
 {
-    const int NetLocalGroupEnumSuccess = 0;
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern int LsaOpenPolicy(IntPtr systemName, ref LSA_OBJECT_ATTRIBUTES objAttributes, int desiredAccess, out IntPtr policyHandle);
 
-    [DllImport("netapi32.dll", SetLastError = true)]
-    public static extern int NetLocalGroupEnum(string serverName, int level, out IntPtr bufPtr, int prefMaxLen, out int totalEntries);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern int LsaEnumerateAccountRights(IntPtr policyHandle, IntPtr accountSid, out IntPtr userRights, out int countOfRights);
 
-    [DllImport("netapi32.dll", SetLastError = true)]
-    public static extern int NetLocalGroupGetMembers(string serverName, string groupName, int level, out IntPtr bufPtr, int prefMaxLen, out int totalEntries);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern int LsaClose(IntPtr policyHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool LookupAccountName(string lpSystemName, string lpAccountName, IntPtr Sid, ref int cbSid, StringBuilder ReferencedDomainName, ref int cchReferencedDomainName, out int peUse);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern int LsaNtStatusToWinError(int status);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LSA_OBJECT_ATTRIBUTES
+    {
+        public int Length;
+        public IntPtr RootDirectory;
+        public IntPtr ObjectName;
+        public uint Attributes;
+        public IntPtr SecurityDescriptor;
+        public IntPtr SecurityQualityOfService;
+    }
+
+    [DllImport("netapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern int NetLocalGroupEnum(
+        string serverName, 
+        int level, 
+        out IntPtr bufPtr, 
+        int prefMaxLen, 
+        out int totalEntries, 
+        out int totalBytesNeeded, 
+        out IntPtr resumeHandle
+    );
 
     [DllImport("netapi32.dll", SetLastError = true)]
     public static extern int NetApiBufferFree(IntPtr buffer);
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     public struct LOCALGROUP_INFO_0
     {
         public IntPtr grpi0_name;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct LOCALGROUP_MEMBERS_INFO_0
+    public static List<string> GetGroupPrivileges(string groupName)
     {
-        public IntPtr lgrmi0_sid;
+        var output = new List<string>();
+        IntPtr policyHandle;
+
+        // Set LSA Object Attributes to zero
+        LSA_OBJECT_ATTRIBUTES lsaAttributes = new LSA_OBJECT_ATTRIBUTES();
+        lsaAttributes.Length = Marshal.SizeOf(lsaAttributes);
+
+        int result = LsaOpenPolicy(IntPtr.Zero, ref lsaAttributes, 0x00000800, out policyHandle);
+        if (result != 0)
+        {
+            output.Add("[-] Failed to open LSA policy. Error Code: " + LsaNtStatusToWinError(result));
+            return output;
+        }
+
+        IntPtr sid = GetGroupSid(groupName);
+        if (sid == IntPtr.Zero)
+        {
+            output.Add("[-] Failed to retrieve SID for group: " + groupName);
+            return output;
+        }
+
+        IntPtr userRights;
+        int countOfRights;
+        result = LsaEnumerateAccountRights(policyHandle, sid, out userRights, out countOfRights);
+
+        if (result != 0)
+        {
+            output.Add("[-] Failed to enumerate account rights. Error Code: " + LsaNtStatusToWinError(result));
+        }
+        else if (userRights == IntPtr.Zero || countOfRights == 0)
+        {
+            output.Add("[-] No privileges found for this group.");
+        }
+        else
+        {
+            IntPtr iter = userRights;
+            for (int i = 0; i < countOfRights; i++)
+            {
+                try
+                {
+                    string privilege = Marshal.PtrToStringUni(Marshal.ReadIntPtr(iter));
+                    output.Add("  - Privilege: " + privilege);
+                    iter = IntPtr.Add(iter, IntPtr.Size);
+                }
+                catch (AccessViolationException)
+                {
+                    output.Add("[-] Failed to read privilege from memory.");
+                    break;
+                }
+            }
+        }
+
+        LsaClose(policyHandle);
+        return output;
     }
 
     public static List<string> GetLocalGroups()
     {
-        var output = new List<string>();
+        var groups = new List<string>();
         IntPtr bufPtr = IntPtr.Zero;
+        IntPtr resumeHandle = IntPtr.Zero;
         int totalEntries;
+        int totalBytesNeeded;
 
-        int result = NetLocalGroupEnum(null, 0, out bufPtr, 0, out totalEntries); // Changed -1 to 0
-        if (result == NetLocalGroupEnumSuccess) // Success
+        int result = NetLocalGroupEnum(
+            null, // local machine
+            0,    // information level 0 (group names)
+            out bufPtr, 
+            -1,   // unlimited buffer size
+            out totalEntries, 
+            out totalBytesNeeded, 
+            out resumeHandle
+        );
+
+        if (result == 0 && bufPtr != IntPtr.Zero)
         {
             try
             {
@@ -149,67 +218,47 @@ public class LowLevelPrivilegeFetcher
                 for (int i = 0; i < totalEntries; i++)
                 {
                     IntPtr current = IntPtr.Add(bufPtr, i * structSize);
-                    LOCALGROUP_INFO_0 localGroup = (LOCALGROUP_INFO_0)Marshal.PtrToStructure(current, typeof(LOCALGROUP_INFO_0));
-                    output.Add("Local Group: " + Marshal.PtrToStringAuto(localGroup.grpi0_name)); // Use Marshal.PtrToStringAuto to convert to string
-                    
-                    // Check user membership
-                    CheckUserMembership(Marshal.PtrToStringAuto(localGroup.grpi0_name), output);
+                    LOCALGROUP_INFO_0 groupInfo = (LOCALGROUP_INFO_0)Marshal.PtrToStructure(current, typeof(LOCALGROUP_INFO_0));
+
+                    string groupName = Marshal.PtrToStringAuto(groupInfo.grpi0_name);
+                    groups.Add(groupName);
                 }
             }
             finally
             {
-                if (bufPtr != IntPtr.Zero)
-                    NetApiBufferFree(bufPtr);
+                NetApiBufferFree(bufPtr);
             }
         }
         else
         {
-            output.Add("[-] Failed to retrieve local groups. Error Code: " + result);
+            groups.Add("[-] Failed to retrieve local groups. Error Code: {result}");
         }
 
-        return output;
+        return groups;
     }
 
-    private static void CheckUserMembership(string groupName, List<string> output)
+    public static IntPtr GetGroupSid(string groupName)
     {
-        IntPtr bufPtr = IntPtr.Zero;
-        int totalEntries;
+        int sidSize = 0;
+        int domainNameSize = 0;
+        int peUse;
 
-        int result = NetLocalGroupGetMembers(null, groupName, 0, out bufPtr, 0, out totalEntries); // Changed -1 to 0
-        if (result == 0) // Success
+        // Call with null values to get the required buffer sizes
+        LookupAccountName(null, groupName, IntPtr.Zero, ref sidSize, null, ref domainNameSize, out peUse);
+
+        // Allocate buffers
+        IntPtr sid = Marshal.AllocHGlobal(sidSize);
+        StringBuilder domainName = new StringBuilder(domainNameSize);
+
+        bool success = LookupAccountName(null, groupName, sid, ref sidSize, domainName, ref domainNameSize, out peUse);
+
+        if (!success)
         {
-            try
-            {
-                int structSize = Marshal.SizeOf(typeof(LOCALGROUP_MEMBERS_INFO_0));
-                for (int i = 0; i < totalEntries; i++)
-                {
-                    IntPtr current = IntPtr.Add(bufPtr, i * structSize);
-                    LOCALGROUP_MEMBERS_INFO_0 member = (LOCALGROUP_MEMBERS_INFO_0)Marshal.PtrToStructure(current, typeof(LOCALGROUP_MEMBERS_INFO_0));
-
-                    // Translate SID to name here
-                    string sidName = GetSidName(member.lgrmi0_sid);
-                    if (sidName == WindowsIdentity.GetCurrent().User.Value)
-                    {
-                        output.Add("  - User is a member of: " + groupName);
-                    }
-                }
-            }
-            finally
-            {
-                if (bufPtr != IntPtr.Zero)
-                    NetApiBufferFree(bufPtr);
-            }
+            Marshal.FreeHGlobal(sid);
+            return IntPtr.Zero;
         }
-        else
-        {
-            output.Add("[-] Failed to retrieve members of " + groupName + ". Error Code: " + result);
-        }
-    }
 
-    private static string GetSidName(IntPtr sid)
-    {
-        // Implement SID to name translation here
-        return sid.ToString(); // Temporary placeholder
+        return sid;
     }
 }
 
@@ -332,6 +381,56 @@ function Get-LocalAdminGroupName {
         Write-Output "[-] Failed to get Administrators group name: $_"
         return $null
     }
+}
+function Get-AllLocalGroupsInfo {
+    # Get the local computer entry
+    $localComputer = New-Object System.DirectoryServices.DirectoryEntry("WinNT://$($env:COMPUTERNAME),computer")
+
+    $groupDetailsList = @()
+
+    # Iterate through each child of the local computer entry
+    foreach ($child in $localComputer.Children) {
+        if ($child.SchemaClassName -eq 'Group') {
+            $groupEntry = New-Object System.DirectoryServices.DirectoryEntry($child.Path)
+
+            $groupDetails = @{
+                Name        = $groupEntry.Name
+                Description = $groupEntry.Properties["Description"].Value
+                Members     = @()
+                Privileges  = @()
+            }
+
+            # List group members
+            try {
+                $members = $groupEntry.Invoke("Members")
+                foreach ($member in $members) {
+                    $memberEntry = New-Object System.DirectoryServices.DirectoryEntry($member)
+                    if ($memberEntry -ne $null) {
+                        $groupDetails.Members += $memberEntry.Name
+                    }
+                }
+            } catch {
+                Write-Error "Error retrieving members for group '$($groupEntry.Name)': $_"
+            }
+
+            # Attempt to get privileges
+            try {
+                # This will likely need to be adjusted based on your environment
+                $privileges = $groupEntry.Properties["Privileges"].Value
+                if ($privileges -ne $null) {
+                    $groupDetails.Privileges = $privileges
+                } else {
+                    $groupDetails.Privileges = "No privileges found."
+                }
+            } catch {
+                Write-Error "Error retrieving privileges for group '$($groupEntry.Name)': $_"
+            }
+
+            $groupDetailsList += $groupDetails
+        }
+    }
+
+    return $groupDetailsList
 }
 
 # Collect local administrators (language independent)
@@ -463,7 +562,9 @@ function sh_check {
     }
 
     # TODO - Try C# group permission enum
-    #    [GroupPermissionsFetcher]::GetGroupPermissions()
+    Write-Output "[*] Trying to get Group infos (limited on non-AD machines)"
+    $allGroupInfo = Get-AllLocalGroupsInfo
+    Write-Output $allGroupInfo | Format-Table -AutoSize
 
     # Collect AntiVirus Products
     try {
