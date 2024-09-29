@@ -372,7 +372,8 @@ function Get-AllLocalGroupsInfo {
                 Name        = $groupEntry.Name
                 Description = $groupEntry.Properties["Description"].Value
                 Members     = @()
-                Privileges  = @()
+                # Probably not working
+                # Privileges  = @()
             }
 
             # List group members
@@ -389,16 +390,17 @@ function Get-AllLocalGroupsInfo {
             }
 
             # Attempt to get privileges
-            try {
+            
+            #try {
                 # This will likely need to be adjusted based on your environment
-                $privileges = $groupEntry.Properties["Privileges"].Value
-                if ($privileges -ne $null) {
-                    $groupDetails.Privileges = $privileges
-                } 
-            } catch {
-                Write-Error "Error retrieving privileges for group '$($groupEntry.Name)': $_"
-            }
-
+            #    $privileges = $groupEntry.Properties["Privileges"].Value
+            #    if ($privileges -ne $null) {
+            #        $groupDetails.Privileges = $privileges
+            #    } 
+            #} catch {
+            #    Write-Error "Error retrieving privileges for group '$($groupEntry.Name)': $_"
+            #}
+            
             $groupDetailsList += $groupDetails
         }
     }
@@ -449,7 +451,8 @@ function sh_check {
     Write-Output "[*] Starting additional SH-focused collection..." 
     Write-Output "Note: This is not intended to be run alone, but relies on data"
     Write-Output "from check 1-12 to make a proper, SH / BH json file."
-
+    Write-Output " "
+    
     # Initialize collections if needed
     if (-not $gCollect['SH_Data']) {
         $gCollect['SH_Data'] = @{
@@ -537,7 +540,8 @@ function sh_check {
     # TODO - Try C# group permission enum
     Write-Output "[*] Trying to get Group infos (limited on non-AD machines)"
     $allGroupInfo = Get-AllLocalGroupsInfo
-    Write-Output $allGroupInfo | Select-Object -Property Name, Description, Members | Format-Table -AutoSize
+    Write-Output $allGroupInfo 
+    Write-Output " "
 
     # Collect AntiVirus Products
     try {
