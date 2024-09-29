@@ -7,7 +7,6 @@ Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
-using System.DirectoryServices;
 using System.Security.Principal;
 using System.Collections;
 using System.Text;
