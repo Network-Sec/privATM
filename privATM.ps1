@@ -286,6 +286,7 @@ public class Win32 {
     public static extern IntPtr GetCurrentProcess();
 }
 "@
+
 function splitStringToColumns {
     param (
         [string]$inputString
@@ -318,6 +319,7 @@ function splitStringToColumns {
     }
     return $columns
 }
+
 function runSubprocess {
     param(
         [string]$filename,
@@ -346,6 +348,7 @@ function runSubprocess {
     # Output the result
     return $output
 }
+
 function Get-LocalAdminGroupName {
     try {
         $adminGroup = (Get-WmiObject -Class Win32_Group -Filter "SID='S-1-5-32-544'").Name
@@ -717,6 +720,7 @@ function sh_check {
 
     Write-Output "[*] Finished SH-focused data collection."
 }
+
 function sh_translate {
     # Initialize Transformed object
     $gCollect['Transformed'] = @{
@@ -761,6 +765,7 @@ function sh_translate {
 
     # Note: Skip edges for now since BloodHound will construct those from nodes.
 }
+
 function sh_store {
     # Store the transformed data to disk or send it somewhere
     $storagePath = "C:\Temp\stealth_data.json"
@@ -774,6 +779,7 @@ function sh_store {
         $gCollect | ConvertTo-Json -Depth 3 | Write-Output
     }
 }
+
 function run_SH_collection {
     # some further checks / data collection not covered by other checks
     sh_check
@@ -782,6 +788,7 @@ function run_SH_collection {
     sh_translate
     sh_store
 }
+
 function Get-AccessTokenHandle {
     [IntPtr]$tokenHandle = [IntPtr]::Zero
     try {
@@ -796,6 +803,7 @@ function Get-AccessTokenHandle {
     }
 }
 
+# Functions for each technique - checks and execution
 function checkCertySAN {
     if ($DEBUG_MODE) { Write-Output "Checking for Certify SAN vulnerabilities..." }
 
@@ -971,10 +979,13 @@ function checkSeImpersonatePrivilege {
     return $hasImpersonatePrivilege
 }
 
-# Functions for each technique - checks and execution
 function checkUserRightsAssignments {
     if ($DEBUG_MODE) { Write-Output "Checking for User Rights Assignments..." }
     checkSeImpersonatePrivilege
+}
+
+function trySeImpersonatePrivilege {
+    if ($DEBUG_MODE) { Write-Output "Trying to use SeImpersonatePrivilege..." }
 }
 
 function tryUserRightsAssignments {
@@ -1268,12 +1279,10 @@ function checkEFSSettings {
     }
 }
 
-
 function tryEFSSettings {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Weak EFS Settings..." }
     # Logic for exploiting weak EFS settings
 }
-
 
 # Menu displayfunction 
 function showMenu {
@@ -1396,10 +1405,7 @@ function main {
 
         foreach ($selection in $selections) {
             switch ($selection) {
-                1 { 
-                    $hasImpersonatePrivilege = checkUserRightsAssignments; 
-                    if ((-not $scanOnly) -and ($hasImpersonatePrivilege)) { tryUserRightsAssignments } 
-                }
+                1 { checkSeImpersonatePrivilege; if (-not $scanOnly)  { trySeImpersonatePrivilege } }
                 2 { checkServiceMisconfigurations; if (-not $scanOnly) { tryServiceMisconfigurations } }
                 3 { checkScheduledTasks; if (-not $scanOnly) { tryScheduledTasks } }
                 4 { checkWMIEventSubscription; if (-not $scanOnly) { tryWMIEventSubscription } }
