@@ -540,7 +540,7 @@ function sh_check {
     }
 
     # TODO - Try C# group permission enum
-    Write-Output "[*] Trying to get Group infos (limited on non-AD machines)"
+    Write-Output "[*] Trying to get Group infos (limited on non-AD machines), may take a minute..."
     $allGroupInfo = Get-AllLocalGroupsInfo
     Write-Output $allGroupInfo 
     Write-Output " "
@@ -715,7 +715,6 @@ function sh_check {
 
     Write-Output "[*] Finished SH-focused data collection."
 }
-
 function sh_translate {
     # Initialize Transformed object
     $gCollect['Transformed'] = @{
@@ -945,6 +944,7 @@ function tryUserRightsAssignments {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via User Rights Assignments..." }
     # Logic for exploiting User Rights Assignments
 }
+
 function checkServiceMisconfigurations {
     if ($DEBUG_MODE) { Write-Output "Checking for Service Misconfigurations..." }
     
@@ -953,7 +953,7 @@ function checkServiceMisconfigurations {
         "Permissions"  = @()
     }
 
-    Write-Host "[*] Trying to find writable env-path before System32..."
+    Write-Output "[*] Trying to find writable env-path before System32..."
     $env:Path -split ";" | ForEach-Object {
         try {
             # Attempt to create a temporary file in the current path
@@ -962,7 +962,6 @@ function checkServiceMisconfigurations {
             if ($?) {
                 # If the file creation was successful, add to the writable paths
                 $writeableEnvPath["Path"] += $_
-                Write-Output "[+] $_"
                 $writeableEnvPath["Permissions"] += icacls.exe $_ 
                 Remove-Item "$_\t" -ErrorAction SilentlyContinue 
             }             
@@ -975,78 +974,191 @@ function checkServiceMisconfigurations {
             #Write-Output "[!] Error accessing $_" 
         }
     }
-
+    if ($writeableEnvPath["Path"].Count -gt 0) { 
+        Write-Output "[+] Printing first 5 writeable env-pathes "
+        $writeableEnvPath["Path"] | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
+        Write-Output ""
+    }
 }
-
 
 function tryServiceMisconfigurations {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Service Misconfigurations..." }
     # Logic for exploiting service misconfigurations
 }
 
+# New function for enumerating system basics
+function enumerateSystemBasics {
+    if ($DEBUG_MODE) { Write-Output "Enumerating system basics..." }
+    Write-Output "[*] Basic System Enumeration:"
+    
+    $osVersion = Get-WmiObject -Class Win32_OperatingSystem
+    Write-Output "OS Version: $($osVersion.Caption) $($osVersion.Version)"
+    
+    $rootProcesses = Get-Process -IncludeUserName | Where-Object { $_.UserName -eq 'NT AUTHORITY\SYSTEM' }
+    Write-Output "System Processes: $($rootProcesses.Count)"
+    
+    $writableDirs = @()
+    $driveList = Get-WmiObject -Class Win32_LogicalDisk -Filter "DriveType=3"
+    foreach ($drive in $driveList) {
+        if (Test-Path $drive.DeviceID) {
+            $writableDirs += $drive.DeviceID
+        }
+    }
+    Write-Output "Writable Directories Found: $($writableDirs -join ', ')"
+}
+
+# Skeleton function for enumeration
+function runEnumeration {
+    enumerateSystemBasics
+    # Other enumeration logic can go here
+}
+
 function checkScheduledTasks {
     if ($DEBUG_MODE) { Write-Output "Checking for Scheduled Tasks..." }
-    # Logic for checking scheduled tasks
+    try {
+        $scheduledTasks = Get-ScheduledTask | Where-Object {$_.Principal.UserId -ne "SYSTEM"}
+        if ($scheduledTasks) {
+            Write-Output "[+] Found Non-System Scheduled Tasks (printing max. 5):"
+            $scheduledTasks | Select-Object -First 5 | ForEach-Object { Write-Output "$($_.TaskName)" }
+            
+            $gCollect['OtherData']["ScheduledTasks"] = $scheduledTasks.TaskName
+        } else {
+            Write-Output "[-] No vulnerable scheduled tasks found."
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error while checking scheduled tasks: $_" }
+    }
 }
 
 function tryScheduledTasks {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Scheduled Tasks..." }
-    # Logic for exploiting scheduled tasks
+    # Add logic to exploit scheduled tasks if they are vulnerable (e.g., changing executable path to escalate)
 }
 
 function checkWMIEventSubscription {
     if ($DEBUG_MODE) { Write-Output "Checking for WMI Event Subscription Abuse..." }
-    # Logic for checking WMI event subscription abuse
+    try {
+        $wmiEvents = Get-WmiObject -Namespace "root\subscription" -Class __EventFilter
+        if ($wmiEvents) {
+            Write-Output "[+] WMI Event Subscriptions Detected:"
+            $wmiEvents | ForEach-Object { Write-Output "Event: $($_.Name)" }
+            
+            $gCollect['OtherData']["WMIEvents"] = $wmiEvents.Name
+        } else {
+            Write-Output "[-] No vulnerable WMI event subscriptions found."
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error while checking WMI events: $_" }
+    }
 }
 
 function tryWMIEventSubscription {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via WMI Event Subscription..." }
-    # Logic for exploiting WMI event subscription
+    # Logic to exploit WMI event subscriptions
 }
 
 function checkTokenImpersonation {
     if ($DEBUG_MODE) { Write-Output "Checking for Token Impersonation/Manipulation..." }
-    # Logic for checking token impersonation
+    try {
+        $tokens = whoami /priv | Select-String "SeImpersonatePrivilege"
+        if ($tokens) {
+            Write-Output "[+] Token Impersonation Possible."
+            $gCollect['Privileges']["SeImpersonatePrivilege"] = $tokens
+        } else {
+            Write-Output "[-] No Token Impersonation available."
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error checking token impersonation: $_" }
+    }
 }
 
 function tryTokenImpersonation {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Token Impersonation..." }
-    # Logic for token impersonation exploit
+    # Logic for abusing token impersonation, e.g., using tools like `Incognito` to exploit impersonation tokens
 }
 
 function checkRegistryKeyAbuse {
     if ($DEBUG_MODE) { Write-Output "Checking for Registry Key Abuse..." }
-    # Logic for checking registry key abuse
+    try {
+        $vulnerableKeys = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+        if ($vulnerableKeys) {
+            Write-Output "[+] Found vulnerable registry keys for abuse."
+            $gCollect['OtherData']["RegistryKeyAbuse"] = $vulnerableKeys.PSPath
+        } else {
+            Write-Output "[-] No registry keys vulnerable to abuse found."
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error checking registry key abuse: $_" }
+    }
 }
 
 function tryRegistryKeyAbuse {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Registry Key Abuse..." }
-    # Logic for registry key exploitation
+    # Logic for exploiting vulnerable registry keys
 }
 
 function checkSAMHiveAccess {
     if ($DEBUG_MODE) { Write-Output "Checking for SAM Hive Access..." }
-    # Logic for checking CVE-2021-36934
+    $samHivePath = "C:\Windows\System32\config\SAM"
+    
+    # Attempt to access SAM hive with error handling
+    try {
+        # Check if the path exists without throwing an error on access denial
+        $exists = Test-Path -Path $samHivePath -ErrorAction SilentlyContinue
+        if ($exists) {
+            Write-Output "[+] SAM Hive exists."
+            $gCollect['OtherData']["SAMHiveAccess"] = $samHivePath
+        } else {
+            Write-Output "[-] SAM Hive does not exist or is inaccessible."
+        }
+    } catch {
+        Write-Output "[-] Error accessing SAM Hive: $_"
+    }
 }
 
 function trySAMHiveAccess {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via SAM Hive Access..." }
-    # Logic for exploiting CVE-2021-36934
+    # Logic for abusing SAM Hive (LSA Secrets) if vulnerable
 }
 
 function checkAutorunAbuse {
     if ($DEBUG_MODE) { Write-Output "Checking for Autorun Program Abuse..." }
-    # Logic for checking autorun abuse
+    try {
+        $autoruns = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+        if ($autoruns) {
+            Write-Output "[+] Autorun programs found:"
+            $autoruns | ForEach-Object { Write-Output "Run Entry: $($_.PSPath)" }
+            $gCollect['OtherData']["AutorunAbuse"] = $autoruns.PSPath
+        } else {
+            Write-Output "[-] No vulnerable autorun programs found."
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error checking autorun abuse: $_" }
+    }
 }
 
 function tryAutorunAbuse {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Autorun Program Abuse..." }
-    # Logic for exploiting autorun programs
+    # Logic for abusing autorun programs
 }
 
 function checkGPOAbuse {
     if ($DEBUG_MODE) { Write-Output "Checking for Insecure GPO Permissions..." }
-    # Logic for checking GPO abuse
+    try {
+        # Modify this according to your environment's GPO specifics
+        $gpos = Get-GPO -All
+        foreach ($gpo in $gpos) {
+            $gpoPermissions = Get-GPPermission -Guid $gpo.Id -TargetName "Domain Admins" -TargetType Group
+            if ($gpoPermissions) {
+                Write-Output "[+] Insecure GPO Permissions Detected for GPO: $($gpo.DisplayName)"
+                $gCollect['OtherData']["GPOAbuse"] += $gpo.DisplayName
+            } else {
+                Write-Output "[-] No insecure GPO permissions found for GPO: $($gpo.DisplayName)."
+            }
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error checking GPO permissions: $_" }
+    }
 }
 
 function tryGPOAbuse {
@@ -1056,45 +1168,74 @@ function tryGPOAbuse {
 
 function checkCOMObjectAbuse {
     if ($DEBUG_MODE) { Write-Output "Checking for COM Object Abuse..." }
-    # Logic for checking COM object abuse
+    try {
+        $comObjects = Get-WmiObject -Query "SELECT * FROM Win32_COMClass"
+        if ($comObjects) {
+            Write-Output "[+] Found COM objects."
+            $gCollect['OtherData']["COMObjectAbuse"] = $comObjects.Name
+        } else {
+            Write-Output "[-] No COM objects found."
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error checking COM objects: $_" }
+    }
 }
 
 function tryCOMObjectAbuse {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via COM Object Abuse..." }
-    # Logic for exploiting COM objects
+    # Logic for abusing COM objects
 }
 
 function checkDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Checking for DCOM Lateral Movement..." }
-    # Logic for checking DCOM lateral movement
+    try {
+        $dcomAppID = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
+        if ($dcomAppID) {
+            Write-Output "[+] DCOM Applications detected (printing max. 5):"
+            $dcomAppID | Select-Object -First 5 ForEach-Object { Write-Output "$($_.AppID)" }
+            $gCollect['OtherData']["DCOMLateralMovement"] = $dcomAppID.AppID
+        } else {
+            Write-Output "[-] No DCOM applications found."
+        }
+    } catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error checking DCOM movement: $_" }
+    }
 }
 
 function tryDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via DCOM Lateral Movement..." }
-    # Logic for DCOM lateral movement exploitation
+    # Logic for exploiting DCOM for lateral movement
 }
 
 function checkEFSSettings {
-    if ($DEBUG_MODE) { Write-Output "Checking for Weak EFS Settings..." }
-    # Logic for checking EFS settings
+    if ($DEBUG_MODE) { Write-Output "Checking for EFS Settings..." }
+    
+    # Check if the WMI class exists before attempting to retrieve it
+    $classExists = Get-WmiObject -List | Where-Object { $_.Name -eq "Win32_EncryptableVolume" }
+    
+    if ($classExists) {
+        try {
+            $efsSettings = Get-WmiObject -Class Win32_EncryptableVolume
+            if ($efsSettings) {
+                Write-Output "[+] EFS settings retrieved."
+                # Process EFS settings here...
+            } else {
+                Write-Output "[-] No EFS settings found."
+            }
+        } catch {
+            Write-Output "[-] Error retrieving EFS settings: $_"
+        }
+    } else {
+        Write-Output "[-] WMI Class 'Win32_EncryptableVolume' not found on this system."
+    }
 }
+
 
 function tryEFSSettings {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Weak EFS Settings..." }
-    # Logic for exploiting weak EFS
+    # Logic for exploiting weak EFS settings
 }
 
-# New function for enumerating system basics
-function enumerateSystemBasics {
-    if ($DEBUG_MODE) { Write-Output "Enumerating system basics..." }
-    # Logic to find root processes, writable paths, and registry access
-}
-
-# Skeleton function for enumeration
-function runEnumeration {
-    enumerateSystemBasics
-    # Other enumeration logic can go here
-}
 
 # Menu displayfunction 
 function showMenu {
@@ -1160,6 +1301,8 @@ function processInput {
     } elseif ($cliInput -like 't*') {
         $cliInput = $cliInput.Substring(1)  # Remove 't' prefix for trying
         $tryAll = $true
+    } elseif ($cliInput -like 'q*') {
+       exit(0);
     }
     
     $inputArray = $cliInput -split ','
@@ -1197,40 +1340,42 @@ function processInput {
 
 # Main function that runs the selected techniques
 function main {
-    showMenu
-    $choice = Read-Host "Your selection"
-    if ($DEBUG_MODE) { Write-Output "Raw Input:" $choice }
+    while ($true) {
+        showMenu
+        $choice = Read-Host "Your selection"
+        if ($DEBUG_MODE) { Write-Output "Raw Input:" $choice }
 
-    $inputData = processInput $choice
-    $selections = $inputData.Selections
-    $scanOnly = $inputData.ScanOnly
+        $inputData = processInput $choice
+        $selections = $inputData.Selections
+        $scanOnly = $inputData.ScanOnly
 
-    if ($DEBUG_MODE) { Write-Output "Processed Selections:" $selections }
+        if ($DEBUG_MODE) { Write-Output "Processed Selections:" $selections }
 
-    if ($selections.Count -eq 0) {
-        Write-Output "No valid selections made. Exiting..."
-        return
-    }
+        if ($selections.Count -eq 0) {
+            Write-Output "No valid selections made. Exiting..."
+            return
+        }
 
-    foreach ($selection in $selections) {
-        switch ($selection) {
-            1 { 
-                $hasImpersonatePrivilege = checkUserRightsAssignments; 
-                if ((-not $scanOnly) -and ($hasImpersonatePrivilege)) { tryUserRightsAssignments } 
+        foreach ($selection in $selections) {
+            switch ($selection) {
+                1 { 
+                    $hasImpersonatePrivilege = checkUserRightsAssignments; 
+                    if ((-not $scanOnly) -and ($hasImpersonatePrivilege)) { tryUserRightsAssignments } 
+                }
+                2 { checkServiceMisconfigurations; if (-not $scanOnly) { tryServiceMisconfigurations } }
+                3 { checkScheduledTasks; if (-not $scanOnly) { tryScheduledTasks } }
+                4 { checkWMIEventSubscription; if (-not $scanOnly) { tryWMIEventSubscription } }
+                5 { checkTokenImpersonation; if (-not $scanOnly) { tryTokenImpersonation } }
+                6 { checkRegistryKeyAbuse; if (-not $scanOnly) { tryRegistryKeyAbuse } }
+                7 { checkSAMHiveAccess; if (-not $scanOnly) { trySAMHiveAccess } }
+                8 { checkAutorunAbuse; if (-not $scanOnly) { tryAutorunAbuse } }
+                9 { checkGPOAbuse; if (-not $scanOnly) { tryGPOAbuse } }
+                10 { checkCOMObjectAbuse; if (-not $scanOnly) { tryCOMObjectAbuse } }
+                11 { checkDCOMLateralMovement; if (-not $scanOnly) { tryDCOMLateralMovement } }
+                12 { checkEFSSettings; if (-not $scanOnly) { tryEFSSettings } }
+                13 { run_SH_collection; }
+                default { Write-Output "Invalid selection: $selection" }
             }
-            2 { checkServiceMisconfigurations; if (-not $scanOnly) { tryServiceMisconfigurations } }
-            3 { checkScheduledTasks; if (-not $scanOnly) { tryScheduledTasks } }
-            4 { checkWMIEventSubscription; if (-not $scanOnly) { tryWMIEventSubscription } }
-            5 { checkTokenImpersonation; if (-not $scanOnly) { tryTokenImpersonation } }
-            6 { checkRegistryKeyAbuse; if (-not $scanOnly) { tryRegistryKeyAbuse } }
-            7 { checkSAMHiveAccess; if (-not $scanOnly) { trySAMHiveAccess } }
-            8 { checkAutorunAbuse; if (-not $scanOnly) { tryAutorunAbuse } }
-            9 { checkGPOAbuse; if (-not $scanOnly) { tryGPOAbuse } }
-            10 { checkCOMObjectAbuse; if (-not $scanOnly) { tryCOMObjectAbuse } }
-            11 { checkDCOMLateralMovement; if (-not $scanOnly) { tryDCOMLateralMovement } }
-            12 { checkEFSSettings; if (-not $scanOnly) { tryEFSSettings } }
-            13 { run_SH_collection; }
-            default { Write-Output "Invalid selection: $selection" }
         }
     }
 }
