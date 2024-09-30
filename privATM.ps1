@@ -542,9 +542,11 @@ function sh_check {
     # TODO - Try C# group permission enum
     Write-Output "[*] Trying to get Group infos (limited on non-AD machines), may take a minute..."
     $allGroupInfo = Get-AllLocalGroupsInfo
-    Write-Output $allGroupInfo 
-    Write-Output " "
-
+    if ($allGroupInfo.Count -gt 0) {
+        Write-Output "[*] Found Group infos, printing first 5:"
+        $allGroupInfo | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
+        Write-Output " "
+    }
     # Collect AntiVirus Products
     try {
         $securityPolicies = Get-WmiObject -Namespace "ROOT\SecurityCenter2" -Class "AntiVirusProduct" -ErrorAction Stop
@@ -1020,7 +1022,7 @@ function checkScheduledTasks {
         if ($scheduledTasks) {
             Write-Output "[+] Found Non-System Scheduled Tasks (printing max. 5):"
             $scheduledTasks | Select-Object -First 5 | ForEach-Object { Write-Output "$($_.TaskName)" }
-            
+            Write-Output ""
             $gCollect['OtherData']["ScheduledTasks"] = $scheduledTasks.TaskName
         } else {
             Write-Output "[-] No vulnerable scheduled tasks found."
@@ -1128,6 +1130,7 @@ function checkAutorunAbuse {
         if ($autoruns) {
             Write-Output "[+] Autorun programs found:"
             $autoruns | ForEach-Object { Write-Output "Run Entry: $($_.PSPath)" }
+            Write-Output ""
             $gCollect['OtherData']["AutorunAbuse"] = $autoruns.PSPath
         } else {
             Write-Output "[-] No vulnerable autorun programs found."
