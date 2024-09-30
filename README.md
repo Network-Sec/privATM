@@ -112,10 +112,11 @@ We started working on data collection for Bloodhound ingestion. Because Sharphou
 We consider `privileges` (also 2nd hand, through a group or machine) as rather **well-known** and usually easy path, that Pentesters should quickly recognize (if they can be enumerated that is). So we may resort towards a rather quick print-out in bright-green colour, if it becomes too complicated to implement.
 
 ```powershell
-Your selection: 13
+Your selection: 14
 [*] Starting additional SH-focused collection...
 Note: This is not intended to be run alone, but relies on data
-from check 1-12 to make a proper, SH / BH json file.
+from check 1-13 to make a proper, SH / BH json file.
+
 [+] Local Admins collected using Get-LocalGroupMember
 [+] Logged-on users collected
 [+] Active Sessions collected
