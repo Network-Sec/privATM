@@ -795,6 +795,41 @@ function Get-AccessTokenHandle {
         return [IntPtr]::Zero
     }
 }
+
+function checkCertySAN {
+    if ($DEBUG_MODE) { Write-Output "Checking for Certify SAN vulnerabilities..." }
+
+    try {
+        # Get all user accounts with the service account flag
+        $serviceAccounts = Get-ADUser -Filter { ServicePrincipalName -ne $null } -Property SamAccountName, ServicePrincipalName, PasswordNeverExpires
+
+        if ($serviceAccounts) {
+            foreach ($account in $serviceAccounts) {
+                # Get the user's permissions on the service account
+                $permissions = Get-ACL -Path "AD:\$($account.SamAccountName)"
+
+                # Check for permission to change password
+                $changePassword = $permissions.Access | Where-Object {
+                    $_.ActiveDirectoryRights -eq "ChangePassword" -and $_.IdentityReference -eq $env:USERNAME
+                }
+
+                if ($changePassword) {
+                    Write-Output "[+] Found vulnerable service account: $($account.SamAccountName)"
+                    Write-Output "   - SPN: $($account.ServicePrincipalName)"
+                    Write-Output "   - Can change password: Yes"
+                } else {
+                    Write-Output "[-] Service account: $($account.SamAccountName) - No permission to change password"
+                }
+            }
+        } else {
+            Write-Output "[-] No service accounts found."
+        }
+    }
+    catch {
+        Write-Output "[-] Certify SAN check couldn't be performed (no AD machine?)"
+    }
+}
+
 function checkSeImpersonatePrivilege {
     if ($DEBUG_MODE) { Write-Output "Checking for SeImpersonatePrivilege..." }
 
@@ -1256,8 +1291,8 @@ function showMenu {
     $techniques[10] = "COM Object Abuse"
     $techniques[11] = "DCOM Lateral Movement"
     $techniques[12] = "Exploiting Weak EFS Settings"
-    $techniques[13] = "Run additional checks for SH collection"
-
+    $techniques[13] = "Certify SAN"
+    $techniques[14] = "Run additional checks for SH collection"
     # Prepare an array to hold the formatted output
     $output = @()
 
@@ -1294,7 +1329,7 @@ function processInput {
 
     $scanOnly = $false
     $tryAll = $false
-    $optionCount = 13
+    $optionCount = 14
 
     if ($cliInput -eq 'a') {
         return @{ Selections = 1..$optionCount; ScanOnly = $scanOnly; TryAll = $tryAll }
@@ -1376,7 +1411,8 @@ function main {
                 10 { checkCOMObjectAbuse; if (-not $scanOnly) { tryCOMObjectAbuse } }
                 11 { checkDCOMLateralMovement; if (-not $scanOnly) { tryDCOMLateralMovement } }
                 12 { checkEFSSettings; if (-not $scanOnly) { tryEFSSettings } }
-                13 { run_SH_collection; }
+                13 { checkCertySAN; }
+                14 { run_SH_collection; }
                 default { Write-Output "Invalid selection: $selection" }
             }
         }
