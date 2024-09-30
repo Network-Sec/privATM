@@ -32,8 +32,8 @@ Technique
 3. Scheduled Tasks                  10. COM Object Abuse
 4. WMI Event Subscription Abuse     11. DCOM Lateral Movement
 5. Token Impersonation/Manipulation 12. Exploiting Weak EFS Settings
-6. Registry Key Abuse               13. Run additional checks for SH collection
-7. CVE-2021-36934 (SAM Hive Access)
+6. Registry Key Abuse               13. Certify SAN
+7. CVE-2021-36934 (SAM Hive Access) 14. Run additional checks for SH collection
 
 a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
 
@@ -90,8 +90,8 @@ Technique
 3. Scheduled Tasks                  10. COM Object Abuse
 4. WMI Event Subscription Abuse     11. DCOM Lateral Movement
 5. Token Impersonation/Manipulation 12. Exploiting Weak EFS Settings
-6. Registry Key Abuse               13. Run additional checks for SH collection
-7. CVE-2021-36934 (SAM Hive Access)
+6. Registry Key Abuse               13. Certify SAN
+7. CVE-2021-36934 (SAM Hive Access) 14. Run additional checks for SH collection
 
 a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
 
