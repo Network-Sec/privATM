@@ -1271,7 +1271,7 @@ function checkDCOMLateralMovement {
         $dcomApplications = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
         
         if ($dcomApplications) {
-            Write-Output "[+] DCOM Applications detected, analyzing permissions..."
+            Write-Output "[+] DCOM Applications detected, analyzing permissions, will take a minute"
 
             foreach ($app in $dcomApplications) {
                 $appID = $app.AppID
