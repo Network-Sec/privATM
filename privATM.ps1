@@ -1337,7 +1337,7 @@ function checkDCOMLateralMovement {
                         $obj = [System.Activator]::CreateInstance($com)
                         $item = $obj.Item()
                         $item.Document.Application.ShellExecute("cmd.exe", "/c calc.exe", "c:\windows\system32", $null, 0)
-                        Write-Output "[+] Command executed via ShellWindows on local host."
+                        Write-Output "[+] Command executed via ShellWindows"
                     } catch {
                         Write-Output "[-] Error executing command via ShellWindows: $_"
                     }
