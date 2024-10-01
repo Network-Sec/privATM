@@ -288,29 +288,52 @@ public class Win32 {
 "@
 
 function Get-LocalizedUserMapping {
-    $localizedUser = @{}
-
-    # Define a hashtable with common localized user names and their corresponding SIDs
     $userMappings = @{
-        'NT AUTHORITY\SYSTEM' = 'S-1-5-18'
-        'NT AUTHORITY\NETWORK SERVICE' = 'S-1-5-20'
-        'NT AUTHORITY\LOCAL SERVICE' = 'S-1-5-19'
-        'Everyone' = 'S-1-1-0'
-        'Authenticated Users' = 'S-1-5-11'
         'Administrators' = 'S-1-5-32-544'
+        'NT AUTHORITY\SYSTEM' = 'S-1-5-18'
         'Users' = 'S-1-5-32-545'
+        'Authenticated Users' = 'S-1-5-11'
+        'NT AUTHORITY\NETWORK SERVICE' = 'S-1-5-20'
+        'Everyone' = 'S-1-1-0'
+        'NT AUTHORITY\LOCAL SERVICE' = 'S-1-5-19'
     }
 
-    # Populate the localizedUser hashtable
-    foreach ($key in $userMappings.Keys) {
-        $localizedUser[$key] = [PSCustomObject]@{
-            Name = $key
-            SID = $userMappings[$key]
+    $localizedUser = @{}
+
+    foreach ($englishName in $userMappings.Keys) {
+        # Get the SID
+        $sid = $userMappings[$englishName]
+
+        # Get the localized name for the current system language
+        $localizedName = (New-Object System.Security.Principal.SecurityIdentifier($sid)).Translate([System.Security.Principal.NTAccount]).Value
+
+        # Check if the English name contains a backslash
+        if ($englishName -notmatch '\\') {
+            # Remove any prefix using regex (e.g., ".*\")
+            $localizedName = $localizedName -replace '.*\\', ''
+        }
+
+        # Populate the hashtable with all mappings
+        $localizedUser[$englishName] = @{
+            SID = $sid
+            LocalizedName = $localizedName
+        }
+
+        $localizedUser[$localizedName] = @{
+            SID = $sid
+            EnglishName = $englishName
+        }
+
+        $localizedUser[$sid] = @{
+            SID = $sid
+            LocalizedName = $localizedName
+            EnglishName = $englishName
         }
     }
 
     return $localizedUser
 }
+
 
 function splitStringToColumns {
     param (
@@ -1271,7 +1294,7 @@ function checkDCOMLateralMovement {
         $dcomApplications = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
         
         if ($dcomApplications) {
-            Write-Output "[+] DCOM Applications detected, analyzing permissions, will take a minute"
+            Write-Output "[+] DCOM Applications detected, analyzing permissions. This will take a minute..."
 
             foreach ($app in $dcomApplications) {
                 $appID = $app.AppID
@@ -1289,7 +1312,8 @@ function checkDCOMLateralMovement {
                     foreach ($accessRule in $acl.Access) {
                         $identity = $accessRule.IdentityReference.ToString()
 
-                        if ($localizedUser.ContainsKey($identity)) {
+                        # Check if the identity is in the localized user mappings (both localized and English names)
+                        if ($localizedUser.ContainsKey($identity) -or $localizedUser.ContainsKey($identity)) {
                             Write-Output "[+] Found AppID with misconfigured Launch Permissions: $appID ($appName)"
                             Write-Output "    Launch Permissions include: $identity (SID: $($localizedUser[$identity].SID))"
                             Write-Output "    RunAsUser: $runAsUser"
@@ -1299,7 +1323,7 @@ function checkDCOMLateralMovement {
                     }
 
                     # Check if it's running as an elevated user (like SYSTEM or Administrator)
-                    if ($runAsUser -and ($localizedUser.Values | Where-Object { $_.Name -eq $runAsUser })) {
+                    if ($runAsUser -and ($localizedUser.Values | Where-Object { $_.EnglishName -eq $runAsUser })) {
                         Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
                     }
                 } else {
@@ -1313,6 +1337,7 @@ function checkDCOMLateralMovement {
         Write-Output "[-] Error checking DCOM movement: $_"
     }
 }
+
 
 function tryDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via DCOM Lateral Movement..." }
