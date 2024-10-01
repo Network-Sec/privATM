@@ -1323,13 +1323,12 @@ function checkDCOMLateralMovement {
 
                 if ($trustedIdentities -contains $runAsUser) {
                     Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
-                    Write-Output $appSetting
-
+                    
                     # Get the ACL for the CLSID
                     $clsidPath = "HKLM:\Software\Classes\CLSID\$appID"
                     if (Test-Path $clsidPath) {
                         $acl = Get-Acl -Path $clsidPath
-                        $hasMisconfiguredLaunchPerms = $false
+                        Write-Output $acl | Format-List
 
                         # Check ACL for known users
                         foreach ($accessRule in $acl.Access) {
