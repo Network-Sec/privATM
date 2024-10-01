@@ -289,14 +289,14 @@ public class Win32 {
 
 function Get-LocalizedUserMapping {
     $userMappings = @{
-        'Administrators' = 'S-1-5-32-544'
-        'NT AUTHORITY\SYSTEM' = 'S-1-5-18'
-        'Users' = 'S-1-5-32-545'
-        'Authenticated Users' = 'S-1-5-11'
-        'NT AUTHORITY\NETWORK SERVICE' = 'S-1-5-20'
-        'Everyone' = 'S-1-1-0'
-        'NT AUTHORITY\LOCAL SERVICE' = 'S-1-5-19'
-    }
+        'administrators' = 'S-1-5-32-544'
+        'nt authority\system' = 'S-1-5-18'
+        'users' = 'S-1-5-32-545'
+        'authenticated users' = 'S-1-5-11'
+        'nt authority\network service' = 'S-1-5-20'
+        'everyone' = 'S-1-1-0'
+        'nt authority\local service' = 'S-1-5-19'
+    }    
 
     $localizedUser = @{}
 
@@ -305,7 +305,7 @@ function Get-LocalizedUserMapping {
         $sid = $userMappings[$englishName]
 
         # Get the localized name for the current system language
-        $localizedName = (New-Object System.Security.Principal.SecurityIdentifier($sid)).Translate([System.Security.Principal.NTAccount]).Value
+        $localizedName = (New-Object System.Security.Principal.SecurityIdentifier($sid)).Translate([System.Security.Principal.NTAccount]).Value.ToLower()
 
         # Check if the English name contains a backslash
         if ($englishName -notmatch '\\') {
@@ -1282,12 +1282,26 @@ function tryCOMObjectAbuse {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via COM Object Abuse..." }
     # Logic for abusing COM objects
 }
-
 function checkDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Checking for DCOM Lateral Movement..." }
 
     # Get the mapping of localized users
     $localizedUser = Get-LocalizedUserMapping
+
+    # We compare localized <=> localized, we could of course do SID <=> SID instead
+
+    # Define trusted identities using localized names
+    $trustedIdentities = @(
+             $localizedUser['nt authority\system'].LocalizedName,
+             $localizedUser['administrators'].LocalizedName
+    )
+
+    # Define localized low-priv user identifiers
+    $lowPrivUsers = @(
+        $localizedUser['everyone'].LocalizedName,
+        $localizedUser['authenticated users'].LocalizedName,
+        $localizedUser['users'].LocalizedName
+    )
 
     try {
         Write-Output "[*] Checking for DCOM misconfigurations..."
@@ -1297,37 +1311,40 @@ function checkDCOMLateralMovement {
             Write-Output "[+] DCOM Applications detected, analyzing permissions. This will take a minute..."
 
             foreach ($app in $dcomApplications) {
+                # Check if it's running as an elevated user (like SYSTEM or Administrator)
                 $appID = $app.AppID
                 $appName = $app.Description
                 $appSetting = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'"
-                $runAsUser = $appSetting.RunAsUser
+                $runAsUser = "None"
 
-                # Get the ACL for the CLSID
-                $clsidPath = "HKLM:\Software\Classes\CLSID\$appID"
-                if (Test-Path $clsidPath) {
-                    $acl = Get-Acl -Path $clsidPath
-                    $hasMisconfiguredLaunchPerms = $false
+                if ($appSetting.RunAsUser) {
+                    $runAsUser = $localizedUser[$appSetting.RunAsUser.ToLower()].LocalizedName
+                }
 
-                    # Check ACL for known users
-                    foreach ($accessRule in $acl.Access) {
-                        $identity = $accessRule.IdentityReference.ToString()
+                if ($trustedIdentities -contains $runAsUser) {
+                    Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
+                    Write-Output $appSetting
 
-                        # Check if the identity is in the localized user mappings (both localized and English names)
-                        if ($localizedUser.ContainsKey($identity) -or $localizedUser.ContainsKey($identity)) {
-                            Write-Output "[+] Found AppID with misconfigured Launch Permissions: $appID ($appName)"
-                            Write-Output "    Launch Permissions include: $identity (SID: $($localizedUser[$identity].SID))"
-                            Write-Output "    RunAsUser: $runAsUser"
-                            $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] = $appID
-                            $hasMisconfiguredLaunchPerms = $true
+                    # Get the ACL for the CLSID
+                    $clsidPath = "HKLM:\Software\Classes\CLSID\$appID"
+                    if (Test-Path $clsidPath) {
+                        $acl = Get-Acl -Path $clsidPath
+                        $hasMisconfiguredLaunchPerms = $false
+
+                        # Check ACL for known users
+                        foreach ($accessRule in $acl.Access) {
+                            $identity = $localizedUser[$accessRule.IdentityReference.ToString()].LocalizedName
+
+                            # Check for Allow permissions granted to untrusted users
+                            if ($accessRule.AccessControlType -eq 'Allow' -and ($lowPrivUsers -contains $identity)) {
+                                Write-Output "[+] Found AppID with misconfigured Launch Permissions: $appID ($appName)"
+                                $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] += $appID
+                                $hasMisconfiguredLaunchPerms = $true
+                            }
                         }
                     }
-
-                    # Check if it's running as an elevated user (like SYSTEM or Administrator)
-                    if ($runAsUser -and ($localizedUser.Values | Where-Object { $_.EnglishName -eq $runAsUser })) {
-                        Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
-                    }
                 } else {
-                    if ($DEBUG_MODE) { Write-Output "[-] CLSID path does not exist for AppID: $appID" }
+                    if ($DEBUG_MODE) { Write-Output "[-] $appID runs only with low privs" }
                 }
             }
         } else {
