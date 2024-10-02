@@ -700,7 +700,7 @@ function getWifiKeys {
 }
 
 function sh_check {
-    Write-Output "[*] Starting additional SH-focused collection..." 
+    Write-Output "[$([char]0xD83D + [char]0xDC80)] Starting additional SH-focused collection..." 
     Write-Output "Note: This is not intended to be run alone, but relies on data"
     Write-Output "from the other checks."
     Write-Output " "
@@ -790,10 +790,10 @@ function sh_check {
     }
 
     # TODO - Try C# group permission enum
-    Write-Output "[*] Trying to get Group infos (limited on non-AD machines), may take a minute..."
+    Write-Output "[$([char]0xD83D + [char]0xDC80)] Trying to get Group infos (limited on non-AD machines), may take a minute..."
     $allGroupInfo = Get-AllLocalGroupsInfo
     if ($allGroupInfo.Count -gt 0) {
-        Write-Output "[*] Found Group infos, printing first 5:"
+        Write-Output "[$([char]0xD83D + [char]0xDC80)] Found Group infos, printing first 5:"
         $allGroupInfo | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
         Write-Output " "
     }
@@ -967,7 +967,7 @@ function sh_check {
     # Try to access Wifi Keys
     getWifiKeys
 
-    Write-Output "[*] Finished SH-focused data collection."
+    Write-Output "[$([char]0xD83D + [char]0xDC80)] Finished SH-focused data collection."
 }
 
 function sh_translate {
@@ -1127,7 +1127,7 @@ function trySePrivileges {
     foreach ($privName in $gCollect['Privileges'].Keys) {
         switch ($privName) {
             "SeImpersonatePrivilege" {
-                Write-Output "[*] Checking SeImpersonate preconditions..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeImpersonate preconditions..."
                 if ([TokenImp]::ImpSys()) {
                     Write-Output "[+] Token impersonation successful. Elevated privileges acquired!"
                     Start-Process cmd.exe
@@ -1136,10 +1136,10 @@ function trySePrivileges {
                 }
             }
             "SeBackupPrivilege" {
-                Write-Output "[*] Checking SeBackupPrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeBackupPrivilege..."
                 # Attempt to read from a non-critical temp file
                 $tempFile = "C:\Windows\Temp\testfile.txt"
-                Write-Output "[*] Attempting to read from $tempFile..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Attempting to read from $tempFile..."
                 if (Test-Path $tempFile) {
                     Get-Content $tempFile
                 } else {
@@ -1148,28 +1148,28 @@ function trySePrivileges {
                 }
             }
             "SeDebugPrivilege" {
-                Write-Output "[*] Checking SeDebugPrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeDebugPrivilege..."
                 # Attempt to dump LSASS or debug non-critical process
-                Write-Output "[*] Trying to dump a test process..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Trying to dump a test process..."
                 # Example placeholder for actual memory dump function
             }
             "SeTakeOwnershipPrivilege" {
-                Write-Output "[*] Checking SeTakeOwnershipPrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeTakeOwnershipPrivilege..."
                 # Attempt to take ownership of a non-critical file in System32
                 $testFile = "C:\Windows\System32\testfile.txt"
-                Write-Output "[*] Attempting to take ownership of $testFile..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Attempting to take ownership of $testFile..."
                 if (-not (Test-Path $testFile)) {
                     "Test content" | Out-File -FilePath $testFile
                 }
                 Take-Ownership -Path $testFile
             }
             "SeCreateSymbolicLinkPrivilege" {
-                Write-Output "[*] Checking SeCreateSymbolicLinkPrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeCreateSymbolicLinkPrivilege..."
                 Write-Output "[+] Creating symbolic link for testing..."
                 New-Item -ItemType SymbolicLink -Path "C:\Windows\Temp\TestLink" -Target "C:\Windows\Temp\testfile.txt"
             }
             "SeLoadDriverPrivilege" {
-                Write-Output "[*] Checking SeLoadDriverPrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeLoadDriverPrivilege..."
                 $tempPath = "C:\Windows\Temp"
                 $driverSource = @"
 using System; using System.Runtime.InteropServices; public class HelloWorld { [DllImport("user32.dll")] public static extern int MessageBox(int hWnd, string text, string caption, int type); public static void Main() { MessageBox(0, "Hello from the driver!", "Driver Message", 0);} } 
@@ -1192,19 +1192,19 @@ using System; using System.Runtime.InteropServices; public class HelloWorld { [D
                 }
             }
             "SeRestorePrivilege" {
-                Write-Output "[*] Checking SeRestorePrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeRestorePrivilege..."
                 Write-Output "[+] Attempting to restore a test file..."
                 $restoreFilePath = "C:\Windows\Temp\restoredfile.txt"
                 "This is a restored file." | Out-File -FilePath $restoreFilePath
             }
             "SeCreateTokenPrivilege" {
-                Write-Output "[*] Checking SeCreateTokenPrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeCreateTokenPrivilege..."
                 Write-Output "[+] Attempting to create a new token for impersonation..."
                 $token = New-Object System.Security.Principal.WindowsIdentity -ArgumentList "NewUser", $true # Adjust as necessary
                 $token.Impersonate()
             }
             "SeSecurityPrivilege" {
-                Write-Output "[*] Checking SeSecurityPrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeSecurityPrivilege..."
                 Write-Output "[+] Attempting to modify security settings on a test file..."
                 $testFile = "C:\Windows\Temp\testfile.txt"
                 $acl = Get-Acl -Path $testFile
@@ -1213,7 +1213,7 @@ using System; using System.Runtime.InteropServices; public class HelloWorld { [D
                 Set-Acl -Path $testFile -AclObject $acl
             }
             "SeChangeNotifyPrivilege" {
-                Write-Output "[*] Checking SeChangeNotifyPrivilege..."
+                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeChangeNotifyPrivilege..."
                 Write-Output "[+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path "
             }
             # Additional privileges can be checked here
@@ -1238,7 +1238,7 @@ function checkServiceMisconfigurations {
         "Permissions"  = @()
     }
 
-    Write-Output "[*] Trying to find writable env-path before System32..."
+    Write-Output "[$([char]0xD83D + [char]0xDC80)] Trying to find writable env-path before System32..."
     $env:Path -split ";" | ForEach-Object {
         try {
             # Attempt to create a temporary file in the current path
@@ -1274,7 +1274,7 @@ function tryServiceMisconfigurations {
 # New function for enumerating system basics
 function enumerateSystemBasics {
     if ($DEBUG_MODE) { Write-Output "Enumerating system basics..." }
-    Write-Output "[*] Basic System Enumeration:"
+    Write-Output "[$([char]0xD83D + [char]0xDC80)] Basic System Enumeration:"
     
     $osVersion = Get-WmiObject -Class Win32_OperatingSystem
     Write-Output "OS Version: $($osVersion.Caption) $($osVersion.Version)"
@@ -1491,7 +1491,7 @@ function checkDCOMLateralMovement {
     )
 
     try {
-        Write-Output "[*] Checking for DCOM misconfigurations..."
+        Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking for DCOM misconfigurations..."
         $dcomApplications = Get-CimInstance Win32_DCOMApplication
         
         if ($dcomApplications) {
