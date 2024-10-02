@@ -634,11 +634,75 @@ function collect_LAs {
         }
     }
 }
+function getWifiKeys {
+    # Check if wlansvc is running, otherwise fail gracefully
+    try {
+        $wlansvcStatus = Get-Service -Name WlanSvc -ErrorAction SilentlyContinue
+        if ($wlansvcStatus.Status -eq 'Running') {
+
+            # Get all saved Wi-Fi profiles
+            $profiles = netsh wlan show profiles | Select-String ":(.*)" | ForEach-Object {
+                ($_ -split ":")[1].Trim()
+            }
+
+            if ($profiles.Count -eq 0) {
+                Write-Output "[-] No Wi-Fi profiles found"
+                return
+            }
+
+            # Loop through each profile and show password and other details
+            foreach ($profile in $profiles) {
+                $profileInfo = netsh wlan show profile name="$profile" key=clear
+
+                # Display Wi-Fi profile name
+                Write-Output "Wi-Fi Profile: $profile"
+                
+                # Look for Key Content (password), handling different locales
+                $keyContentLine = $profileInfo | Select-String "(Key Content|Schlüsselinhalt|Contenido de la clave|Clave de red)" 
+                
+                if ($keyContentLine) {
+                    $password = ($keyContentLine -split ":")[1].Trim()
+                    Write-Output "Password: $password"
+                } else {
+                    Write-Output "Password: No password saved or profile uses a non-standard method."
+                }
+
+                # Display more useful info: Authentication, Cipher, Connection type
+                $authLine = $profileInfo | Select-String "(Authentication|Authentifizierung|Autenticación)"
+                $cipherLine = $profileInfo | Select-String "(Cipher|Verschlüsselung|Cifrado)"
+                $connectionTypeLine = $profileInfo | Select-String "(Connection mode|Verbindungsmodus|Modo de conexión)"
+
+                if ($authLine) {
+                    $authType = ($authLine -split ":")[1].Trim()
+                    Write-Output "Authentication: $authType"
+                }
+
+                if ($cipherLine) {
+                    $cipherType = ($cipherLine -split ":")[1].Trim()
+                    Write-Output "Cipher: $cipherType"
+                }
+
+                if ($connectionTypeLine) {
+                    $connectionType = ($connectionTypeLine -split ":")[1].Trim()
+                    Write-Output "Connection Type: $connectionType"
+                }
+
+                Write-Output "-----------------------------"
+            }
+        }
+        else {
+            Write-Output "[-] WLAN AutoConfig service (wlansvc) is not running."
+        }
+    }
+    catch {
+        Write-Output "[-] Error occurred while retrieving Wi-Fi keys: $_"
+    }
+}
 
 function sh_check {
     Write-Output "[*] Starting additional SH-focused collection..." 
     Write-Output "Note: This is not intended to be run alone, but relies on data"
-    Write-Output "from check 1-12 to make a proper, SH / BH json file."
+    Write-Output "from the other checks."
     Write-Output " "
 
     # Initialize collections if needed
@@ -900,6 +964,8 @@ function sh_check {
         Write-Output "[-] Failed to display system event example"
     }
 
+    # Try to access Wifi Keys
+    getWifiKeys
 
     Write-Output "[*] Finished SH-focused data collection."
 }
@@ -1061,49 +1127,49 @@ function trySePrivileges {
     foreach ($privName in $gCollect['Privileges'].Keys) {
         switch ($privName) {
             "SeImpersonatePrivilege" {
-                Write-Host "[*] Checking SeImpersonate preconditions..."
+                Write-Output "[*] Checking SeImpersonate preconditions..."
                 if ([TokenImp]::ImpSys()) {
-                    Write-Host "[+] Token impersonation successful. Elevated privileges acquired!"
+                    Write-Output "[+] Token impersonation successful. Elevated privileges acquired!"
                     Start-Process cmd.exe
                 } else {
-                    Write-Host "[-] Token impersonation failed. No elevated privileges."
+                    Write-Output "[-] Token impersonation failed. No elevated privileges."
                 }
             }
             "SeBackupPrivilege" {
-                Write-Host "[*] Checking SeBackupPrivilege..."
+                Write-Output "[*] Checking SeBackupPrivilege..."
                 # Attempt to read from a non-critical temp file
                 $tempFile = "C:\Windows\Temp\testfile.txt"
-                Write-Host "[*] Attempting to read from $tempFile..."
+                Write-Output "[*] Attempting to read from $tempFile..."
                 if (Test-Path $tempFile) {
                     Get-Content $tempFile
                 } else {
-                    Write-Host "[-] $tempFile does not exist. Creating for testing..."
+                    Write-Output "[-] $tempFile does not exist. Creating for testing..."
                     "This is a test file." | Out-File -FilePath $tempFile
                 }
             }
             "SeDebugPrivilege" {
-                Write-Host "[*] Checking SeDebugPrivilege..."
+                Write-Output "[*] Checking SeDebugPrivilege..."
                 # Attempt to dump LSASS or debug non-critical process
-                Write-Host "[*] Trying to dump a test process..."
+                Write-Output "[*] Trying to dump a test process..."
                 # Example placeholder for actual memory dump function
             }
             "SeTakeOwnershipPrivilege" {
-                Write-Host "[*] Checking SeTakeOwnershipPrivilege..."
+                Write-Output "[*] Checking SeTakeOwnershipPrivilege..."
                 # Attempt to take ownership of a non-critical file in System32
                 $testFile = "C:\Windows\System32\testfile.txt"
-                Write-Host "[*] Attempting to take ownership of $testFile..."
+                Write-Output "[*] Attempting to take ownership of $testFile..."
                 if (-not (Test-Path $testFile)) {
                     "Test content" | Out-File -FilePath $testFile
                 }
                 Take-Ownership -Path $testFile
             }
             "SeCreateSymbolicLinkPrivilege" {
-                Write-Host "[*] Checking SeCreateSymbolicLinkPrivilege..."
-                Write-Host "[+] Creating symbolic link for testing..."
+                Write-Output "[*] Checking SeCreateSymbolicLinkPrivilege..."
+                Write-Output "[+] Creating symbolic link for testing..."
                 New-Item -ItemType SymbolicLink -Path "C:\Windows\Temp\TestLink" -Target "C:\Windows\Temp\testfile.txt"
             }
             "SeLoadDriverPrivilege" {
-                Write-Host "[*] Checking SeLoadDriverPrivilege..."
+                Write-Output "[*] Checking SeLoadDriverPrivilege..."
                 $tempPath = "C:\Windows\Temp"
                 $driverSource = @"
 using System; using System.Runtime.InteropServices; public class HelloWorld { [DllImport("user32.dll")] public static extern int MessageBox(int hWnd, string text, string caption, int type); public static void Main() { MessageBox(0, "Hello from the driver!", "Driver Message", 0);} } 
@@ -1119,27 +1185,27 @@ using System; using System.Runtime.InteropServices; public class HelloWorld { [D
                 & $cscPath -out:$compiledDriverPath $driverSourcePath
 
                 if (Test-Path $compiledDriverPath) {
-                    Write-Host "[+] Driver compiled successfully. Attempting to load..."
+                    Write-Output "[+] Driver compiled successfully. Attempting to load..."
                     Start-Process -FilePath $compiledDriverPath
                 } else {
-                    Write-Host "[-] Driver compilation failed."
+                    Write-Output "[-] Driver compilation failed."
                 }
             }
             "SeRestorePrivilege" {
-                Write-Host "[*] Checking SeRestorePrivilege..."
-                Write-Host "[+] Attempting to restore a test file..."
+                Write-Output "[*] Checking SeRestorePrivilege..."
+                Write-Output "[+] Attempting to restore a test file..."
                 $restoreFilePath = "C:\Windows\Temp\restoredfile.txt"
                 "This is a restored file." | Out-File -FilePath $restoreFilePath
             }
             "SeCreateTokenPrivilege" {
-                Write-Host "[*] Checking SeCreateTokenPrivilege..."
-                Write-Host "[+] Attempting to create a new token for impersonation..."
+                Write-Output "[*] Checking SeCreateTokenPrivilege..."
+                Write-Output "[+] Attempting to create a new token for impersonation..."
                 $token = New-Object System.Security.Principal.WindowsIdentity -ArgumentList "NewUser", $true # Adjust as necessary
                 $token.Impersonate()
             }
             "SeSecurityPrivilege" {
-                Write-Host "[*] Checking SeSecurityPrivilege..."
-                Write-Host "[+] Attempting to modify security settings on a test file..."
+                Write-Output "[*] Checking SeSecurityPrivilege..."
+                Write-Output "[+] Attempting to modify security settings on a test file..."
                 $testFile = "C:\Windows\Temp\testfile.txt"
                 $acl = Get-Acl -Path $testFile
                 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Everyone", "FullControl", "Allow")
@@ -1147,8 +1213,8 @@ using System; using System.Runtime.InteropServices; public class HelloWorld { [D
                 Set-Acl -Path $testFile -AclObject $acl
             }
             "SeChangeNotifyPrivilege" {
-                Write-Host "[*] Checking SeChangeNotifyPrivilege..."
-                Write-Host "[+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path "
+                Write-Output "[*] Checking SeChangeNotifyPrivilege..."
+                Write-Output "[+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path "
             }
             # Additional privileges can be checked here
         }
