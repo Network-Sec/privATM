@@ -1086,7 +1086,6 @@ function trySePrivileges {
                 # Attempt to dump LSASS or debug non-critical process
                 Write-Host "[*] Trying to dump a test process..."
                 # Example placeholder for actual memory dump function
-                Dump-Process -ProcessName "TestProcess" # Replace with an actual running test process name
             }
             "SeTakeOwnershipPrivilege" {
                 Write-Host "[*] Checking SeTakeOwnershipPrivilege..."
@@ -1149,9 +1148,7 @@ using System; using System.Runtime.InteropServices; public class HelloWorld { [D
             }
             "SeChangeNotifyPrivilege" {
                 Write-Host "[*] Checking SeChangeNotifyPrivilege..."
-                Write-Host "[+] Bypassing traverse checking to access restricted folders..."
-                # Example command to access a non-critical folder
-                Get-ChildItem -Path "C:\Windows\Temp"
+                Write-Host "[+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path "
             }
             # Additional privileges can be checked here
         }
