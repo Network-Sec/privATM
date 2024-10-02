@@ -1171,13 +1171,11 @@ function trySePrivileges {
             "SeLoadDriverPrivilege" {
                 Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeLoadDriverPrivilege..."
                 $tempPath = "C:\Windows\Temp"
-                $driverSource = @"
-using System; using System.Runtime.InteropServices; public class HelloWorld { [DllImport("user32.dll")] public static extern int MessageBox(int hWnd, string text, string caption, int type); public static void Main() { MessageBox(0, "Hello from the driver!", "Driver Message", 0);} } 
-"@
                 $driverSourcePath = Join-Path -Path $tempPath -ChildPath "HelloWorld.cs"
                 $compiledDriverPath = Join-Path -Path $tempPath -ChildPath "HelloWorld.exe"
-
-                # Write the C# code to a file
+                $driverSource = @"
+using System; using System.Runtime.InteropServices; public class HelloWorld { [DllImport("user32.dll")] public static extern int MessageBox(int hWnd, string text, string caption, int type); public static void Main() { MessageBox(0, System.Security.Principal.WindowsIdentity.GetCurrent().Name, "Driver runs as User:", 0);} } 
+"@
                 Set-Content -Path $driverSourcePath -Value $driverSource
 
                 # Compile the C# code using csc.exe
