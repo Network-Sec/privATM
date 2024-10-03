@@ -489,6 +489,28 @@ public class Win32 {
 }
 "@
 
+function compileOTF {
+    # Compile and load on-the-fly - used mostly for testing and demo purposes
+    $tempPath = "C:\Windows\Temp"
+    $driverSourcePath = Join-Path -Path $tempPath -ChildPath "HelloWorld.cs"
+    $compiledDriverPath = Join-Path -Path $tempPath -ChildPath "HelloWorld.exe"
+    $driverSource = @"
+using System; using System.Runtime.InteropServices; public class HelloWorld { [DllImport("user32.dll")] public static extern int MessageBox(int hWnd, string text, string caption, int type); public static void Main() { MessageBox(0, System.Security.Principal.WindowsIdentity.GetCurrent().Name, "Driver runs as User:", 0);} } 
+"@
+    Set-Content -Path $driverSourcePath -Value $driverSource
+
+    # Compile the C# code using csc.exe
+    $cscPath = "$env:windir\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+    & $cscPath -out:$compiledDriverPath $driverSourcePath
+
+    if (Test-Path $compiledDriverPath) {
+        Write-Output "[+] Driver compiled successfully. Attempting to load..."
+        Start-Process -FilePath $compiledDriverPath
+    } else {
+        Write-Output "[-] Driver compilation failed."
+    }
+}
+
 function Get-LocalizedUserMapping {
     $userMappings = @{
         'administrators' = 'S-1-5-32-544'
@@ -1228,28 +1250,9 @@ function trySePrivileges {
             }
             "SeLoadDriverPrivilege" {
                 Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeLoadDriverPrivilege..."
-                $tempPath = "C:\Windows\Temp"
-                $driverSourcePath = Join-Path -Path $tempPath -ChildPath "HelloWorld.cs"
-                $compiledDriverPath = Join-Path -Path $tempPath -ChildPath "HelloWorld.exe"
-                $driverSource = @"
-using System; using System.Runtime.InteropServices; public class HelloWorld { [DllImport("user32.dll")] public static extern int MessageBox(int hWnd, string text, string caption, int type); public static void Main() { MessageBox(0, System.Security.Principal.WindowsIdentity.GetCurrent().Name, "Driver runs as User:", 0);} } 
-"@
-                Set-Content -Path $driverSourcePath -Value $driverSource
-
-                # Compile the C# code using csc.exe
-                $cscPath = "$env:windir\Microsoft.NET\Framework\v4.0.30319\csc.exe"
-                & $cscPath -out:$compiledDriverPath $driverSourcePath
-
-                if (Test-Path $compiledDriverPath) {
-                    Write-Output "[+] Driver compiled successfully. Attempting to load..."
-                    Start-Process -FilePath $compiledDriverPath
-                } else {
-                    Write-Output "[-] Driver compilation failed."
-                }
-
-                # Actual driver (above was placeholder)
                 $currentUserSID = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
                 $driverKeyPath = "Registry::HKEY_USERS\$currentUserSID\System\CurrentControlSet\Services\DriverName"
+                $registryPath = "Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\DriverName"
                 # TODO
                 $driverBinaryPath = pwd + "\\Capcom.sys"
                 if (-not (Test-Path $driverKeyPath)) {
