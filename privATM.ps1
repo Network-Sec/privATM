@@ -70,6 +70,7 @@ $vDrivers = @(
     @{ Name = "ZemanaAntiMalwareDriver" }
 )
 
+
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -1694,6 +1695,26 @@ function tryEFSSettings {
     # Logic for exploiting weak EFS settings
 }
 
+function checkDriversPresent {
+    try {
+        Write-Output "[$([char]0xD83D + [char]0xDC80)] Looking for presence of vulnerable drivers..."
+        foreach ($driver in $vDrivers) {
+            $driverName = $driver.Name
+            $driverPath = Get-ChildItem -Path C:\Windows\System32\drivers\ -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $driverName }
+
+            if ($driverPath) {
+                Write-Output "[+] $driverName is present at $($driverPath.FullName)"
+            }
+        }
+    }
+    catch {
+        Write-Output "[-] Error checking drivers"
+    }
+}
+
+# Run the function to check drivers
+Check-Drivers
+
 # Menu displayfunction 
 function showMenu {
     # Manually assign techniques to an indexed array
@@ -1711,7 +1732,8 @@ function showMenu {
     $techniques[11] = "DCOM Lateral Movement"
     $techniques[12] = "Exploiting Weak EFS Settings"
     $techniques[13] = "Certify SAN"
-    $techniques[14] = "Run additional checks for SH collection"
+    $techniques[14] = "Check for presence of vuln drivers"
+    $techniques[15] = "Run additional checks for SH collection"
     # Prepare an array to hold the formatted output
     $output = @()
 
@@ -1748,7 +1770,7 @@ function processInput {
 
     $scanOnly = $false
     $tryAll = $false
-    $optionCount = 14
+    $optionCount = 15
 
     if ($cliInput -eq 'a') {
         return @{ Selections = 1..$optionCount; ScanOnly = $scanOnly; TryAll = $tryAll }
@@ -1828,7 +1850,8 @@ function main {
                 11 { checkDCOMLateralMovement; if (-not $scanOnly) { tryDCOMLateralMovement } }
                 12 { checkEFSSettings; if (-not $scanOnly) { tryEFSSettings } }
                 13 { checkCertySAN; }
-                14 { run_SH_collection; }
+                14 { checkDriversPresent; }
+                15 { run_SH_collection; }
                 default { Write-Output "Invalid selection: $selection" }
             }
         }
