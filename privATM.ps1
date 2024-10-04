@@ -1487,6 +1487,15 @@ function tryTokenImpersonation {
 
 function checkRegistryKeyAbuse {
     if ($DEBUG_MODE) { Write-Output "Checking for Registry Key Abuse..." }
+    $localizedUsers = Get-LocalizedUserMapping
+
+    # Weak identity mappings based on localized names
+    $weakIdentities = @(
+        $localizedUsers['everyone'].LocalizedName,
+        $localizedUsers['authenticated users'].LocalizedName,
+        $localizedUsers['users'].LocalizedName
+    )
+
     try {
         # Define registry paths to check
         $registryPaths = @(
@@ -1508,27 +1517,24 @@ function checkRegistryKeyAbuse {
 
         foreach ($path in $registryPaths) {
             try {
-                # Check for items in each registry path
-                $vulnerableKeys = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+                Write-Output "[*] Testing: $path"
+                $acl = Get-Acl -Path $path -ErrorAction Stop
+                # Output all ACL entries for debugging
 
-                if ($vulnerableKeys) {
-                    Write-Output "[*] Checking $path."
-
-                    foreach ($key in $vulnerableKeys.PSChildName) {
-                        # Check permissions for each key
-                        $acl = Get-Acl -Path "$path\$key" -ErrorAction SilentlyContinue
-                        $permission = $acl.Access | Where-Object { $_.AccessControlType -eq 'Allow' -and $_.IdentityReference -like '*Everyone*' }
-
-                        if ($permission) {
-                            # Add details about vulnerable key
-                            $gCollect['OtherData']["RegistryKeyAbuse"] += @{
-                                "Key"         = $key
-                                "Severity"    = "High"
-                                "Permissions" = $permission.IdentityReference
-                                "Tips"        = "Check for executable paths and consider overriding with a malicious payload."
-                            }
-                            Write-Output "[+] Key: $key in $path has weak permissions. Potential severity: High."
+                foreach ($identity in $weakIdentities) {
+                    $permission = $acl.Access | Where-Object { 
+                        $_.AccessControlType -eq 'Allow' -and $_.IdentityReference -like "*$identity*" 
+                    }
+            
+                    if ($permission) {
+                        # Capture the weak permissions
+                        $gCollect['OtherData']["RegistryKeyAbuse"] += @{
+                            "Key"         = $path
+                            "Severity"    = "High"
+                            "Permissions" = $permission.IdentityReference -join ', '
+                            "Tips"        = "Try to establish persistance"
                         }
+                        Write-Output "[+] Key: $path has weak permissions for $identity. Potential severity: High."
                     }
                 }
             } catch {
