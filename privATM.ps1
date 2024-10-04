@@ -52,22 +52,22 @@ $privList = @(
 )
 
 $vDrivers = @(
-    @{ Name = "Capcom.sys" },
-    @{ Name = "RTCore64.sys" },
-    @{ Name = "RTCore32.sys" },
-    @{ Name = "AsrDrv103.sys" },
-    @{ Name = "GDRV.sys" },
-    @{ Name = "TVicPort.sys" },
-    @{ Name = "SpeedFan.sys" },
-    @{ Name = "Aida64Driver.sys" },
-    @{ Name = "Heci.sys" },
-    @{ Name = "WinRing0.sys" },
-    @{ Name = "WinRing0x64.sys" },
-    @{ Name = "AsusFanControl.sys" },
-    @{ Name = "PROCEXP152.sys" },
-    @{ Name = "DBUtilDrv2.sys" },
-    @{ Name = "MateBookManager.sys" },
-    @{ Name = "ZemanaAntiMalwareDriver" }
+    @{ Name = "Capcom.sys"; Message = "Can be used for arbitrary code execution via vulnerable IOCTL calls. High severity." },
+    @{ Name = "RTCore64.sys"; Message = "Vulnerable to privilege escalation by enabling arbitrary kernel read/write. High severity." },
+    @{ Name = "RTCore32.sys"; Message = "Same as RTCore64, vulnerable to privilege escalation via kernel manipulation. High severity." },
+    @{ Name = "AsrDrv103.sys"; Message = "Known for privilege escalation vulnerabilities allowing kernel-level access. High severity." },
+    @{ Name = "GDRV.sys"; Message = "Allows arbitrary kernel memory access, can be abused for privilege escalation. High severity." },
+    @{ Name = "TVicPort.sys"; Message = "Can be used for port I/O control leading to potential system compromise. Medium severity." },
+    @{ Name = "SpeedFan.sys"; Message = "Potential to manipulate hardware monitoring, abused for privilege escalation. Medium severity." },
+    @{ Name = "Aida64Driver.sys"; Message = "Exposes IOCTL calls that can lead to arbitrary kernel-level actions. High severity." },
+    @{ Name = "Heci.sys"; Message = "Used for Intel ME communication, potential attack vector for privilege escalation. Medium severity." },
+    @{ Name = "WinRing0.sys"; Message = "Allows unrestricted hardware access, enabling arbitrary kernel-level code execution. High severity." },
+    @{ Name = "WinRing0x64.sys"; Message = "64-bit version of WinRing0, same high-severity privilege escalation risk." },
+    @{ Name = "AsusFanControl.sys"; Message = "Could be abused for hardware control manipulation, limited privilege escalation potential. Medium severity." },
+    @{ Name = "PROCEXP152.sys"; Message = "Driver for Process Explorer, potential to allow privilege escalation by exploiting weak IOCTL. Medium severity." },
+    @{ Name = "DBUtilDrv2.sys"; Message = "Dell driver with known privilege escalation vulnerabilities. High severity." },
+    @{ Name = "MateBookManager.sys"; Message = "Vulnerable driver used by Huawei MateBook, exploitable for privilege escalation. Medium severity." },
+    @{ Name = "ZemanaAntiMalwareDriver"; Message = "Zemana driver potentially vulnerable to privilege escalation through kernel interactions. Medium severity." }
 )
 
 
@@ -1704,6 +1704,7 @@ function checkDriversPresent {
 
             if ($driverPath) {
                 Write-Output "[+] $driverName is present at $($driverPath.FullName)"
+                Write-Output $driver.Message
             }
         }
     }
