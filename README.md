@@ -91,7 +91,7 @@ We started working on data collection for Bloodhound ingestion. Because Sharphou
 
 We consider `privileges` (also 2nd hand, through a group or machine) as rather **well-known** and usually easy path, that Pentesters should quickly recognize (if they can be enumerated that is). So we may resort towards a rather quick print-out in bright-green colour, if it becomes too complicated to implement.
 
-```powershell
+```cmd
 Your selection: 15
 [💀] Starting additional SH-focused collection...
 Note: This is not intended to be run alone, but relies on data
@@ -112,11 +112,6 @@ D$     D:\        Standardfreigabe
 E$     E:\        Standardfreigabe
 G$     G:\        Standardfreigabe
 IPC$              Remote-IPC
-T$     T:\        Standardfreigabe
-U$     U:\        Standardfreigabe
-V$     V:\        Standardfreigabe
-X$     X:\        Standardfreigabe
-
 
 [+] Domain information collected, machine is domain joined?
 False
@@ -194,7 +189,7 @@ ASUSSystemDiagnosis      Running Auto
 
 
 SourceName : PowerShell
-Message    : Details zur Pipelineausführung für die Befehlszeile:     Write-Output "[+] Trying to collect and refe
+Message    : Details zur Pipelineausführung für die Befehlszeile:     Write-Output [+] Trying to collect and refe
 Path       : C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 
 
