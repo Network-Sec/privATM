@@ -63,13 +63,15 @@ $ .\privATM.ps1
 
 Technique
 ---------                           -------------------------------------------
-1. SeImpersonatePrivilege           8. Autorun Program Abuse
-2. Service Misconfigurations        9. Insecure GPO Permissions
-3. Scheduled Tasks                  10. COM Object Abuse
-4. WMI Event Subscription Abuse     11. DCOM Lateral Movement
-5. Token Impersonation/Manipulation 12. Exploiting Weak EFS Settings
-6. Registry Key Abuse               13. Certify SAN
-7. CVE-2021-36934 (SAM Hive Access) 14. Run additional checks for SH collection
+1. SePrivileges                     9. Insecure GPO Permissions
+2. Service Misconfigurations        10. COM Object Abuse
+3. Scheduled Tasks                  11. DCOM Lateral Movement
+4. WMI Event Subscription Abuse     12. Exploiting Weak EFS Settings
+5. Token Impersonation/Manipulation 13. Certify SAN
+6. Registry Key Abuse               14. Check for presence of vuln drivers
+7. CVE-2021-36934 (SAM Hive Access) 15. Run additional checks for SH collection
+8. Autorun Program Abuse
+
 
 a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
 
