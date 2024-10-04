@@ -92,21 +92,100 @@ We started working on data collection for Bloodhound ingestion. Because Sharphou
 We consider `privileges` (also 2nd hand, through a group or machine) as rather **well-known** and usually easy path, that Pentesters should quickly recognize (if they can be enumerated that is). So we may resort towards a rather quick print-out in bright-green colour, if it becomes too complicated to implement.
 
 ```powershell
-Your selection: 14
-[*] Starting additional SH-focused collection...
+Your selection: 15
+[💀] Starting additional SH-focused collection...
 Note: This is not intended to be run alone, but relies on data
-from check 1-13 to make a proper, SH / BH json file.
+from the other checks.
 
 [+] Local Admins collected using Get-LocalGroupMember
-[+] Logged-on users collected
-[+] Active Sessions collected
+DESKTOP-EX4MPL3\Administrator
+DESKTOP-EX4MPL3\testuser
+
+[+] Active sessions collected: 4 active sessions found.
 [+] Network shares collected
-[+] Domain information collected
+
+Name   Path       Description
+----   ----       -----------
+ADMIN$ C:\Windows Remoteverwaltung
+C$     C:\        Standardfreigabe
+D$     D:\        Standardfreigabe
+E$     E:\        Standardfreigabe
+G$     G:\        Standardfreigabe
+IPC$              Remote-IPC
+T$     T:\        Standardfreigabe
+U$     U:\        Standardfreigabe
+V$     V:\        Standardfreigabe
+X$     X:\        Standardfreigabe
+
+
+[+] Domain information collected, machine is domain joined?
+False
 [+] Group memberships collected
+[💀] Trying to get Group infos (limited on non-AD machines), may take a minute...
+[💀] Found Group infos, printing first 5:
+
+Name        Value
+----        -----
+Description Administratoren haben uneingeschränkten Vollzugriff auf den Computer bzw. die Domäne.
+Name        {Administratoren}
+Members     {Administrator, testuser}
+Description Benutzer können keine zufälligen oder beabsichtigten Änderungen am System durchführen und dürfen die meisten herkömmlichen Anwendungen ausfü...
+Name        {Benutzer}
+Members     {$null, $null, mimitest}
+Description Mitglieder dieser Gruppe können Distributed-COM-Objekte auf diesem Computer starten, aktivieren und verwenden.
+Name        {Distributed COM-Benutzer}
+Members     {}
+Description Mitglieder dieser Gruppe dürfen Ereignisprotokolle des lokalen Computers lesen
+Name        {Ereignisprotokollleser}
+Members     {}
+Description Mitglieder dieser Gruppe können systemweite Einstellungen ändern.
+Name        {Gerätebesitzer}
+Members     {}
+
 [+] AntiVirus products collected via WMI
 [-] No firewall products found or no output.
+[+] Collected Named Pipes
+[+] Collected Full Powershell History
 [+] User rights assignments collected
-[+] Installed services collected
+
+
+
+Name               FullName Domain          SID
+----               -------- ------          ---
+Administrator               DESKTOP-EX4MPL3 S-1-5-21-1861850896-3805680650-3336260861-500
+DefaultAccount              DESKTOP-EX4MPL3 S-1-5-21-1861850896-3805680650-3336260861-503
+Gast                        DESKTOP-EX4MPL3 S-1-5-21-1861850896-3805680650-3336260861-501
+mimitest           mimitest DESKTOP-EX4MPL3 S-1-5-21-1861850896-3805680650-3336260861-1002
+testuser                      DESKTOP-EX4MPL3 S-1-5-21-1861850896-3805680650-3336260861-1001
+WDAGUtilityAccount          DESKTOP-EX4MPL3 S-1-5-21-1861850896-3805680650-3336260861-504
+
+
+[+] Installed services collected, showing first 20
+
+Name                     State   StartMode
+----                     -----   ---------
+AJRouter                 Stopped Manual
+ALG                      Stopped Manual
+AppIDSvc                 Stopped Manual
+Appinfo                  Running Manual
+AppMgmt                  Stopped Manual
+AppReadiness             Stopped Manual
+AppVClient               Stopped Disabled
+AppXSvc                  Running Manual
+asComSvc                 Running Auto
+aspnet_state             Stopped Manual
+AssignedAccessManagerSvc Stopped Manual
+AsusAppService           Running Auto
+AsusCertService          Running Auto
+AsusFanControlService    Running Auto
+ASUSOptimization         Running Auto
+ASUSProArtService        Running Auto
+ASUSSoftwareManager      Running Auto
+ASUSSwitch               Running Auto
+ASUSSystemAnalysis       Running Auto
+ASUSSystemDiagnosis      Running Auto
+
+
 [-] Group policies collection not applicable for standalone machine
 [+] Token delegation info collected
 [-] Trust relationships not applicable for standalone machine
@@ -115,13 +194,13 @@ from check 1-13 to make a proper, SH / BH json file.
 
 
 SourceName : PowerShell
-Message    : Details zur Pipelineausführung für die Befehlszeile:     Write-Host [+] Trying to collect and   
-             refere
+Message    : Details zur Pipelineausführung für die Befehlszeile:     Write-Output "[+] Trying to collect and refe
 Path       : C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 
 
 
-[*] Finished SH-focused data collection.
+[-] No Wi-Fi profiles found
+[💀] Finished SH-focused data collection.
 [+] Data stored at C:\Temp\stealth_data.json.
 ```
 
