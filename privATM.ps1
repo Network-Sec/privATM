@@ -1697,7 +1697,7 @@ function tryEFSSettings {
 
 function checkDriversPresent {
     try {
-        Write-Output "[$([char]0xD83D + [char]0xDC80)] Looking for presence of vulnerable drivers..."
+        Write-Output "[$([char]0xD83D + [char]0xDC80)] Looking for presence of vulnerable drivers already installed..."
         foreach ($driver in $vDrivers) {
             $driverName = $driver.Name
             $driverPath = Get-ChildItem -Path C:\Windows\System32\drivers\ -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $driverName }
