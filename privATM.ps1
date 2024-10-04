@@ -1488,21 +1488,86 @@ function tryTokenImpersonation {
 function checkRegistryKeyAbuse {
     if ($DEBUG_MODE) { Write-Output "Checking for Registry Key Abuse..." }
     try {
-        $vulnerableKeys = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-        if ($vulnerableKeys) {
-            Write-Output "[+] Found vulnerable registry keys for abuse."
-            $gCollect['OtherData']["RegistryKeyAbuse"] = $vulnerableKeys.PSPath
-        } else {
-            Write-Output "[-] No registry keys vulnerable to abuse found."
+        # Define registry paths to check
+        $registryPaths = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce",
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServices",
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServicesOnce",
+            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce",
+            "HKLM\SYSTEM\CurrentControlSet\Services",
+            "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon",
+            "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run",
+            "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run",
+            "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_DLLs"
+        )
+
+        # Initialize global collection for registry key abuse
+        $gCollect['OtherData']["RegistryKeyAbuse"] = @()
+
+        foreach ($path in $registryPaths) {
+            try {
+                # Check for items in each registry path
+                $vulnerableKeys = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+
+                if ($vulnerableKeys) {
+                    Write-Output "[*] Checking $path."
+
+                    foreach ($key in $vulnerableKeys.PSChildName) {
+                        # Check permissions for each key
+                        $acl = Get-Acl -Path "$path\$key" -ErrorAction SilentlyContinue
+                        $permission = $acl.Access | Where-Object { $_.AccessControlType -eq 'Allow' -and $_.IdentityReference -like '*Everyone*' }
+
+                        if ($permission) {
+                            # Add details about vulnerable key
+                            $gCollect['OtherData']["RegistryKeyAbuse"] += @{
+                                "Key"         = $key
+                                "Severity"    = "High"
+                                "Permissions" = $permission.IdentityReference
+                                "Tips"        = "Check for executable paths and consider overriding with a malicious payload."
+                            }
+                            Write-Output "[+] Key: $key in $path has weak permissions. Potential severity: High."
+                        }
+                    }
+                }
+            } catch {
+                if ($DEBUG_MODE) { Write-Output "[-] Error accessing registry path $path $_" }
+            }
         }
     } catch {
-        if ($DEBUG_MODE) { Write-Output "[-] Error checking registry key abuse: $_" }
+        if ($DEBUG_MODE) { Write-Output "[-] Error checking registry key abuse" }
     }
 }
 
 function tryRegistryKeyAbuse {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Registry Key Abuse..." }
-    # Logic for exploiting vulnerable registry keys
+
+    # Check if there are findings in the global collection
+    if ($gCollect['OtherData']["RegistryKeyAbuse"].Count -eq 0) {
+        Write-Output "[-] No weak Autorun Registry permissions found"
+        return
+    }
+
+    # Iterate through the findings and print details
+    foreach ($finding in $gCollect['OtherData']["RegistryKeyAbuse"]) {
+        $key = $finding.Key
+        $severity = $finding.Severity
+        $permissions = $finding.Permissions -join ', '
+        $tips = $finding.Tips
+
+        Write-Output "[+] Found registry key abuse:"
+        Write-Output "    - Key: $key"
+        Write-Output "    - Severity: $severity"
+        Write-Output "    - Permissions: $permissions"
+        Write-Output "    - Tips: $tips"
+
+        # Here you can implement the actual exploitation logic if required
+        # Example: Overwriting the registry key with a malicious payload
+
+        # Uncomment and customize the line below as needed for exploitation
+        # Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\$key" -Value "payload.exe"
+    }
 }
 
 function checkSAMHiveAccess {
