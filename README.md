@@ -43,7 +43,7 @@ Enter number(s) (e.g., 1,5-7,9) or 'a' for all...
 
 Your selection: 1
 
-[!] Found Privs for: DESKTOP-0B1KLOS\occide
+[!] Found Privs for: DESKTOP-EX4MPL3\testuser
 
 [+] SeChangeNotifyPrivilege Allows bypassing some security checks, such as traversing directories. Typically low-risk.
 [+] SeUndockPrivilege       Allows undocking the machine. Not generally useful for privilege escalation.
@@ -131,10 +131,6 @@ Loading of vulnerable drivers like `Capcom.sys` (not included, put in same folde
 We haven't yet fully tested if we can pull off driver loading, purely with Powershell / c# - it's right now one of many TODO items that may or may not work in the end. The exploitation of already installed drivers should however work anyways.
 
 ```powershell
-[💀] Looking for presence of vulnerable drivers already installed...
-[+] PROCEXP152.sys is present at C:\Windows\System32\drivers\PROCEXP152.SYS
-Driver for Process Explorer, potential to allow privilege escalation by exploiting weak IOCTL. Medium severity.
-
 Technique
 ---------                           -------------------------------------------
 1. SePrivileges                     9. Insecure GPO Permissions
@@ -149,5 +145,9 @@ Technique
 
 a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
 Enter number(s) (e.g., 1,5-7,9) or 'a' for all...
-Your selection:
+Your selection: 14
+
+[💀] Looking for presence of vulnerable drivers already installed...
+[+] PROCEXP152.sys is present at C:\Windows\System32\drivers\PROCEXP152.SYS
+Driver for Process Explorer, potential to allow privilege escalation by exploiting weak IOCTL. Medium severity.
 ```
