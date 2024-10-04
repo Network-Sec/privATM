@@ -27,57 +27,35 @@ $ .\privATM.ps1
 
 Technique
 ---------                           -------------------------------------------
-1. SeImpersonatePrivilege           8. Autorun Program Abuse
-2. Service Misconfigurations        9. Insecure GPO Permissions
-3. Scheduled Tasks                  10. COM Object Abuse
-4. WMI Event Subscription Abuse     11. DCOM Lateral Movement
-5. Token Impersonation/Manipulation 12. Exploiting Weak EFS Settings
-6. Registry Key Abuse               13. Certify SAN
-7. CVE-2021-36934 (SAM Hive Access) 14. Run additional checks for SH collection
+1. SePrivileges                     9. Insecure GPO Permissions
+2. Service Misconfigurations        10. COM Object Abuse
+3. Scheduled Tasks                  11. DCOM Lateral Movement
+4. WMI Event Subscription Abuse     12. Exploiting Weak EFS Settings
+5. Token Impersonation/Manipulation 13. Certify SAN
+6. Registry Key Abuse               14. Check for presence of vuln drivers
+7. CVE-2021-36934 (SAM Hive Access) 15. Run additional checks for SH collection
+8. Autorun Program Abuse
+
 
 a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
 
 Enter number(s) (e.g., 1,5-7,9) or 'a' for all...
 
 Your selection: 1
-Checking for User Rights Assignments...
-Checking for SeImpersonatePrivilege...
-[+] Current User: DESKTOP-EXAMPLE\username
 
-[*] Enumerating User Privileges:
-SeLockMemoryPrivilege         Sperren von Seiten im Speicher                  Deaktiviert
-SeShutdownPrivilege           Herunterfahren des Systems                      Deaktiviert
-SeChangeNotifyPrivilege       Auslassen der durchsuchenden Überprüfung        Aktiviert
-SeUndockPrivilege             Entfernen des Computers von der Docking-Station Deaktiviert
-SeIncreaseWorkingSetPrivilege Arbeitssatz eines Prozesses vergrößern          Deaktiviert
-SeTimeZonePrivilege           Ändern der Zeitzone                             Deaktiviert
+[!] Found Privs for: DESKTOP-0B1KLOS\occide
 
-[*] Enumerating User Groups:
-Administratoren
-Leistungsprotokollbenutzer
-Remotedesktopbenutzer
-docker-users
-Message Capture Users
+[+] SeChangeNotifyPrivilege Allows bypassing some security checks, such as traversing directories. Typically low-risk.
+[+] SeUndockPrivilege       Allows undocking the machine. Not generally useful for privilege escalation.
+[+] SeTimeZonePrivilege     Allows changing the time zone, which is typically considered low-risk for privilege escalation.
+[+] SeLockMemoryPrivilege   Allows locking memory, which could potentially be used to interfere with system stability.
+[+] SeShutdownPrivilege     Allows shutting down the system, useful for denial-of-service attacks, but not privilege escalation.
+[+] SeTimeZonePrivilege     Allows changing the time zone. Not generally useful for privilege escalation.
+[+] SeUndockPrivilege       Allows a machine to be undocked. Generally not useful for privilege escalation.
 
-[+] Retrieved additional user account details.
-[+] User Details:
-AuthenticationType: NTLM
-Disabled: False
-FullName:
-ImpersonationLevel: None
-IsAnonymous: False
-IsAuthenticated: True
-IsGuest: False
-IsSystem: False
-LocalAccount: True
-Lockout: False
-SID: S-1-5-21-18634534596-123456788-33345345861-1001
-Token: 7488
-TokenHandle: 7528
 
-[+] Got User SIDs (not printing to keep output short)
-[-] No IdentityReference found for the current user.
-[-] :( DESKTOP-EXAMPLE\username does NOT have SeImpersonatePrivilege.
+[💀] Testing SeChangeNotifyPrivilege...
+[+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path
 ```
 
 ```powershell
