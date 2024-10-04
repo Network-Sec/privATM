@@ -144,3 +144,28 @@ Path       : C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 [*] Finished SH-focused data collection.
 [+] Data stored at C:\Temp\stealth_data.json.
 ```
+
+## Vuln Drivers
+Loading of vulnerable drivers like `Capcom.sys` (not included, put in same folder) when `SeLoadDriverPrivilege` is present as well as generic check for common vulnerable drivers already installed on the system.
+
+```powershell
+[💀] Looking for presence of vulnerable drivers already installed...
+[+] PROCEXP152.sys is present at C:\Windows\System32\drivers\PROCEXP152.SYS
+Driver for Process Explorer, potential to allow privilege escalation by exploiting weak IOCTL. Medium severity.
+
+Technique
+---------                           -------------------------------------------
+1. SePrivileges                     9. Insecure GPO Permissions
+2. Service Misconfigurations        10. COM Object Abuse
+3. Scheduled Tasks                  11. DCOM Lateral Movement
+4. WMI Event Subscription Abuse     12. Exploiting Weak EFS Settings
+5. Token Impersonation/Manipulation 13. Certify SAN
+6. Registry Key Abuse               14. Check for presence of vuln drivers
+7. CVE-2021-36934 (SAM Hive Access) 15. Run additional checks for SH collection
+8. Autorun Program Abuse
+
+
+a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
+Enter number(s) (e.g., 1,5-7,9) or 'a' for all...
+Your selection:
+```
