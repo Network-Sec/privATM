@@ -1712,9 +1712,6 @@ function checkDriversPresent {
     }
 }
 
-# Run the function to check drivers
-Check-Drivers
-
 # Menu displayfunction 
 function showMenu {
     # Manually assign techniques to an indexed array
