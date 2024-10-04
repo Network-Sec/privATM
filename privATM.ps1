@@ -894,7 +894,7 @@ function sh_check {
     Write-Output "[$([char]0xD83D + [char]0xDC80)] Trying to get Group infos (limited on non-AD machines), may take a minute..."
     $allGroupInfo = Get-AllLocalGroupsInfo
     if ($allGroupInfo.Count -gt 0) {
-        Write-Output "[$([char]0xD83D + [char]0xDC80)] Found Group infos, printing first 5:"
+        Write-Output "[+] Found Group infos, printing first 5:"
         $allGroupInfo | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
         Write-Output " "
     }
