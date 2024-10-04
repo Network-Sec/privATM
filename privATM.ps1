@@ -1531,7 +1531,7 @@ function checkRegistryKeyAbuse {
                             "Key"         = $path
                             "Severity"    = "High"
                             "Permissions" = $permission.IdentityReference -join ', '
-                            "Tips"        = "Try to establish persistance"
+                            "Tips"        = "Try to establish Dominance through back-humping"
                         }
                         Write-Output "[+] Key: $path has weak permissions for $identity. Potential severity: High."
                     }
