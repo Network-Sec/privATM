@@ -122,7 +122,7 @@ X$     X:\        Standardfreigabe
 False
 [+] Group memberships collected
 [💀] Trying to get Group infos (limited on non-AD machines), may take a minute...
-[💀] Found Group infos, printing first 5:
+[+] Found Group infos, printing first 5:
 
 Name        Value
 ----        -----
