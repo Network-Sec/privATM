@@ -51,6 +51,24 @@ $privList = @(
     @{name = "SeTrustedCredManAccessPrivilege"; message = "Allows trusted access to stored credentials in the Credential Manager."}
 )
 
+$vDrivers = @(
+    @{ Name = "Capcom.sys" },
+    @{ Name = "RTCore64.sys" },
+    @{ Name = "RTCore32.sys" },
+    @{ Name = "AsrDrv103.sys" },
+    @{ Name = "GDRV.sys" },
+    @{ Name = "TVicPort.sys" },
+    @{ Name = "SpeedFan.sys" },
+    @{ Name = "Aida64Driver.sys" },
+    @{ Name = "Heci.sys" },
+    @{ Name = "WinRing0.sys" },
+    @{ Name = "WinRing0x64.sys" },
+    @{ Name = "AsusFanControl.sys" },
+    @{ Name = "PROCEXP152.sys" },
+    @{ Name = "DBUtilDrv2.sys" },
+    @{ Name = "MateBookManager.sys" },
+    @{ Name = "ZemanaAntiMalwareDriver" }
+)
 
 Add-Type @"
 using System;
