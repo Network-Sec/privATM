@@ -22,7 +22,7 @@ We just started working on this. Come back in 3 months or later. Sorry.
 (may or may not happen)
 
 ## Usage Example
-```powershell
+```
 $ .\privATM.ps1
 
 Technique
@@ -58,7 +58,7 @@ Your selection: 1
 [+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path
 ```
 
-```powershell
+```
 $ .\privATM.ps1
 
 Technique
@@ -91,7 +91,7 @@ We started working on data collection for Bloodhound ingestion. Because Sharphou
 
 We consider `privileges` (also 2nd hand, through a group or machine) as rather **well-known** and usually easy path, that Pentesters should quickly recognize (if they can be enumerated that is). So we may resort towards a rather quick print-out in bright-green colour, if it becomes too complicated to implement.
 
-```cmd
+```
 Your selection: 15
 [💀] Starting additional SH-focused collection...
 Note: This is not intended to be run alone, but relies on data
@@ -204,7 +204,7 @@ Loading of vulnerable drivers like `Capcom.sys` (not included, put in same folde
 
 We haven't yet fully tested if we can pull off driver loading, purely with Powershell / c# - it's right now one of many TODO items that may or may not work in the end. The exploitation of already installed drivers should however work anyways.
 
-```powershell
+```
 Technique
 ---------                           -------------------------------------------
 1. SePrivileges                     9. Insecure GPO Permissions
