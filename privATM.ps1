@@ -1517,7 +1517,6 @@ function checkRegistryKeyAbuse {
 
         foreach ($path in $registryPaths) {
             try {
-                Write-Output "[*] Testing: $path"
                 $acl = Get-Acl -Path $path -ErrorAction Stop
                 # Output all ACL entries for debugging
 
