@@ -1212,7 +1212,7 @@ function checkSePrivileges {
         }
 
         if ($outlist.Length -gt 0) {
-            Write-Output "[!] Found Privs for: $userName" 
+            Write-Output "[+] Found Privs for: $userName" 
             Write-Output $outlist | Format-Table -AutoSize -HideTableHeaders
         }
         else {
