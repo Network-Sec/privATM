@@ -878,6 +878,7 @@ function sh_check {
         $isDomainJoined = (Get-WmiObject Win32_ComputerSystem).PartOfDomain
         $gCollect['SH_Data']['DomainInfo'] = $isDomainJoined
         Write-Output "[+] Domain information collected, machine is domain joined? " $isDomainJoined
+        Write-Output ""
     } catch {
         Write-Output "[-] Failed to collect domain information: $_"
     }
@@ -1720,6 +1721,7 @@ function checkDriversPresent {
                 Write-Output $driver.Message
             }
         }
+        Write-Output ""
     }
     catch {
         Write-Output "[-] Error checking drivers"
