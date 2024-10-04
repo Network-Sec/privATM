@@ -148,6 +148,8 @@ Path       : C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 ## Vuln Drivers
 Loading of vulnerable drivers like `Capcom.sys` (not included, put in same folder) when `SeLoadDriverPrivilege` is present as well as generic check for common vulnerable drivers already installed on the system.
 
+We haven't yet fully tested if we can pull off driver loading, purely with Powershell / c# - it's right now one of many TODO items that may or may not work in the end. The exploitation of already installed drivers should however work anyways.
+
 ```powershell
 [💀] Looking for presence of vulnerable drivers already installed...
 [+] PROCEXP152.sys is present at C:\Windows\System32\drivers\PROCEXP152.SYS
