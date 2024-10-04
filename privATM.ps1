@@ -1634,10 +1634,16 @@ function checkDCOMLateralMovement {
                 if ($trustedIdentities -contains $runAsUser) {
                     # Populate global data with detected DCOM applications
                     Write-Output "[+] Found elevated DCOM app $appName running as $runAsUser"
-                    $gCollect['OtherData']["DCOMLateralMovementApps"] += @{
-                        "AppName" = $appName
-                        "AppID" = $appID
-                        "RunAsUser" = $runAsUser
+                    
+                    if (-not $gCollect['OtherData']["DCOMLateralMovementApps"]) {
+                        $gCollect['OtherData']["DCOMLateralMovementApps"] = @()
+                    }
+
+                    # Create an object and add it to the array
+                    $gCollect['OtherData']["DCOMLateralMovementApps"] += New-Object PSObject -Property @{
+                        AppName   = $appName
+                        AppID     = $appID
+                        RunAsUser = $runAsUser  # Fixed the missing quote here
                     }
 
                     # Check ACLs
