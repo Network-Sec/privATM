@@ -735,6 +735,7 @@ function collect_LAs {
         }
     }
 }
+
 function getWifiKeys {
     # Check if wlansvc is running, otherwise fail gracefully
     try {
@@ -1228,49 +1229,55 @@ function trySePrivileges {
     foreach ($privName in $gCollect['Privileges'].Keys) {
         switch ($privName) {
             "SeImpersonatePrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeImpersonate preconditions..."
+                Write-Output "[!] Testing SeImpersonate preconditions..."
                 if ([TokenImp]::ImpSys()) {
                     Write-Output "[+] Token impersonation successful. Elevated privileges acquired!"
                     Start-Process cmd.exe
                 } else {
                     Write-Output "[-] Token impersonation failed. No elevated privileges."
                 }
+                Write-Output ""
             }
             "SeBackupPrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeBackupPrivilege..."
+                Write-Output "[!] Testing SeBackupPrivilege..."
                 # Attempt to read from a non-critical temp file
                 $tempFile = "C:\Windows\Temp\testfile.txt"
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Attempting to read from $tempFile..."
+                Write-Output "[*] Attempting to read from $tempFile..."
                 if (Test-Path $tempFile) {
                     Get-Content $tempFile
                 } else {
                     Write-Output "[-] $tempFile does not exist. Creating for testing..."
                     "This is a test file." | Out-File -FilePath $tempFile
                 }
+                Write-Output ""
             }
             "SeDebugPrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeDebugPrivilege..."
+                Write-Output "[!] Testing SeDebugPrivilege..."
                 # Attempt to dump LSASS or debug non-critical process
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Trying to dump a test process..."
+                Write-Output "[*] Trying to dump a test process..."
                 # Example placeholder for actual memory dump function
+                Write-Output ""
             }
             "SeTakeOwnershipPrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeTakeOwnershipPrivilege..."
+                Write-Output "[!] Testing SeTakeOwnershipPrivilege..."
                 # Attempt to take ownership of a non-critical file in System32
                 $testFile = "C:\Windows\System32\testfile.txt"
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Attempting to take ownership of $testFile..."
+                Write-Output "[*] Attempting to take ownership of $testFile..."
                 if (-not (Test-Path $testFile)) {
                     "Test content" | Out-File -FilePath $testFile
                 }
                 Take-Ownership -Path $testFile
+                Write-Output ""
             }
             "SeCreateSymbolicLinkPrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeCreateSymbolicLinkPrivilege..."
-                Write-Output "[+] Creating symbolic link for testing..."
+                Write-Output "[!] Testing SeCreateSymbolicLinkPrivilege..."
+                Write-Output "[*] Creating symbolic link for testing..."
+                echo "t" > "C:\Windows\Temp\testfile.txt"
                 New-Item -ItemType SymbolicLink -Path "C:\Windows\Temp\TestLink" -Target "C:\Windows\Temp\testfile.txt"
+                Write-Output ""
             }
             "SeLoadDriverPrivilege" {
-                Write-Output "[$([char]0xD83D) + [char]0xDC80] Checking SeLoadDriverPrivilege..."
+                Write-Output "[!] Testing SeLoadDriverPrivilege..."
                 
                 # Get the current user's SID
                 $currentUserSID = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -1298,32 +1305,37 @@ function trySePrivileges {
                 else {
                     Write-Output "Driver registry path already exists."
                 }
+                Write-Output ""
             }
 
             "SeRestorePrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeRestorePrivilege..."
-                Write-Output "[+] Attempting to restore a test file..."
+                Write-Output "[!] Testing SeRestorePrivilege..."
+                Write-Output "[*] Attempting to restore a test file..."
                 $restoreFilePath = "C:\Windows\Temp\restoredfile.txt"
                 "This is a restored file." | Out-File -FilePath $restoreFilePath
+                Write-Output ""
             }
             "SeCreateTokenPrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeCreateTokenPrivilege..."
+                Write-Output "[!] Testing SeCreateTokenPrivilege..."
                 Write-Output "[+] Attempting to create a new token for impersonation..."
                 $token = New-Object System.Security.Principal.WindowsIdentity -ArgumentList "NewUser", $true # Adjust as necessary
                 $token.Impersonate()
+                Write-Output ""
             }
             "SeSecurityPrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeSecurityPrivilege..."
+                Write-Output "[!] Testing SeSecurityPrivilege..."
                 Write-Output "[+] Attempting to modify security settings on a test file..."
                 $testFile = "C:\Windows\Temp\testfile.txt"
                 $acl = Get-Acl -Path $testFile
                 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Everyone", "FullControl", "Allow")
                 $acl.SetAccessRule($rule)
                 Set-Acl -Path $testFile -AclObject $acl
+                Write-Output ""
             }
             "SeChangeNotifyPrivilege" {
-                Write-Output "[$([char]0xD83D + [char]0xDC80)] Checking SeChangeNotifyPrivilege..."
+                Write-Output "[!] Testing SeChangeNotifyPrivilege..."
                 Write-Output "[+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path "
+                Write-Output ""
             }
             # Additional privileges can be checked here
         }
@@ -1441,6 +1453,7 @@ function checkWMIEventSubscription {
         } else {
             Write-Output "[-] No vulnerable WMI event subscriptions found."
         }
+        Write-Output ""
     } catch {
         if ($DEBUG_MODE) { Write-Output "[-] Error while checking WMI events: $_" }
     }
