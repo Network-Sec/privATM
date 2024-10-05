@@ -1874,13 +1874,13 @@ function checkCreds {
     try {
         # Grep for creds
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
-        $keywordPatterns = @('password', 'pwd', 'login', 'credentials', 'key', 'username')
+        $keywordPatterns = @('password', 'pwd', 'login', 'credentials', 'key', 'username', 'token')
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
 
         foreach ($dir in $dirsToSearch) {
-            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md, *.rtf, *.csv, *.xml, *.one, *.dcn | 
+            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md, *.rtf, *.csv, *.xml, *.one, *.dcn  -ErrorAction SilentlyContinue | 
             Where-Object { 
-                $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda|PowerShell_transcript' 
+                $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
