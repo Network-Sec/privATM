@@ -1865,7 +1865,7 @@ function checkCreds {
 
         foreach ($dir in $dirsToSearch) {
             # Find all matching files first, excluding the ones with 'pyenv' or 'python' in the path
-            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md | Where-Object { $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions' } | Where-Object {(get-acl $_.fullname).access.IdentityReference -Match "$env:USERDOMAIN\\$env:USERNAME"}   
+            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md | Where-Object { $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda' } | Where-Object {(get-acl $_.fullname).access.IdentityReference -Match "$env:USERDOMAIN\\$env:USERNAME"}   
         
             # Iterate over each file
             foreach ($file in $files) {
