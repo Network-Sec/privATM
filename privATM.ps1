@@ -1864,16 +1864,12 @@ function checkCreds {
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
 
         foreach ($dir in $dirsToSearch) {
-            # Find all matching files first, excluding the ones with 'pyenv' or 'python' in the path
             $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md | Where-Object { $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda' } | Where-Object {(get-acl $_.fullname).access.IdentityReference -Match "$env:USERDOMAIN\\$env:USERNAME"}   
         
             # Iterate over each file
             foreach ($file in $files) {
                 try {
-                    # Read all file content at once
                     $content = Get-Content $file.FullName -ErrorAction Stop
-        
-                    # Check for matching patterns
                     foreach ($pattern in $keywordPatterns) {
                         if ($content -match $pattern) {
                             Write-Output "[+] Grep creds match: $($file.FullName)"
