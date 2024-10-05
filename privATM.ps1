@@ -1880,7 +1880,7 @@ function checkCreds {
         foreach ($dir in $dirsToSearch) {
             $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md, *.rtf, *.csv, *.xml, *.one, *.dcn  -ErrorAction SilentlyContinue | 
             Where-Object { 
-                $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda' 
+                $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda|nuget' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
