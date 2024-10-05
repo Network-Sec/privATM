@@ -1872,27 +1872,25 @@ function checkCreds {
     }
 
     try {
-        # Grep for creds
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
         $keywordPatterns = @('password', 'pwd', 'login', 'credentials', 'key', 'username', 'token')
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
-
+    
         foreach ($dir in $dirsToSearch) {
-            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md, *.rtf, *.csv, *.xml, *.one, *.dcn  -ErrorAction SilentlyContinue | 
+            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md, *.rtf, *.csv, *.xml, *.one, *.dcn -ErrorAction SilentlyContinue | 
             Where-Object { 
-                $_.FullName -notmatch 'node_modules|vendor|bower_components|packages|Lib|lib|site-packages|dist-packages|vendor|__pycache__|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|venv|pymakr|wordlist|seclist|extensions|conda|miniconda' 
+                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|packages|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
             
-            # Iterate over each file
             foreach ($file in $files) {
                 try {
-                    $content = Get-Content $file.FullName -ErrorAction Stop
+                    $content = Get-Content $file.FullName -ErrorAction Stop | ForEach-Object { $_.ToLower() }
                     foreach ($pattern in $keywordPatterns) {
-                        if ($content -match $pattern) {
+                        if ($content -match [regex]::Escape($pattern.ToLower())) {
                             Write-Output "[+] Grep creds match: $($file.FullName)"
                         }
                     }
@@ -1901,11 +1899,9 @@ function checkCreds {
                 }
             }
         }
-        
-    }
-    catch {
+    } catch {
         if ($DEBUG_MODE) { Write-Output "[-] Error while grepping for creds" }
-    }
+    }    
 }
 
 # Menu displayfunction 
