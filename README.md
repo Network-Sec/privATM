@@ -10,8 +10,9 @@ We started working on a script, that can be used on real systems, focussing on t
 CTF scripts like WinPEAS are awesome, but on real systems it can take forever to run - if you can get it to run without triggering 100 alerts.
 
 ## WIP - Work In Progress
-We just started working on this. Come back in 3 months or later. Sorry.
+We just started working on this. Come back in 3 months or later - we already made good progress but are still far from what we'd like to deliver in the final version. 
 
+`Note:` ATM there's a ton of `C#` code at the beginning of the script, we'll weed that out before the first 1.0 release, and maybe make a light / stealth / powershell-only version. Just ignore it for now. 
 
 ### TODO list
 - Certify
