@@ -1878,8 +1878,15 @@ function checkCreds {
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
 
         foreach ($dir in $dirsToSearch) {
-            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md | Where-Object { $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda|PowerShell_transcript' } | Where-Object {(get-acl $_.fullname).access.IdentityReference -Match "$env:USERDOMAIN\\$env:USERNAME"}   
-        
+            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md, *.rtf, *.csv, *.xml, *.one, *.dcn | 
+            Where-Object { 
+                $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions|miniconda|PowerShell_transcript' 
+            } | 
+            Where-Object { 
+                ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
+                ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
+            }
+            
             # Iterate over each file
             foreach ($file in $files) {
                 try {
