@@ -1813,7 +1813,6 @@ function checkCreds {
         Write-Output "[-] Error while listing Windows Credential Manager"
     }
 
-    # Paths for browsers' credential databases
     $databases = @(
         "$env:USERPROFILE\AppData\Local\Google\Chrome\User Data\Default\Login Data",
         "$env:USERPROFILE\AppData\Local\BraveSoftware\Brave-Browser\User Data\Default\Login Data",
@@ -1827,22 +1826,31 @@ function checkCreds {
         "$env:APPDATA\Pale Moon\Profiles\*.default\logins.json"
     )
     
-    foreach ($dbPath in $databases) {
+    foreach ($dbPattern in $databases) {
         try {
-            if ((Test-Path $dbPath) -and ((Get-Acl $dbPath).Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME")) {
-                $content = Get-Content -Path $dbPath -ErrorAction Stop
-                foreach ($line in $content) {
-                    if ($line -match "origin_url|username_value") {
-                        Write-Output "[+] Grep Browser creds match, file is accessible! $dbPath"
+            $dbPaths = Get-ChildItem -Path "$dbPattern" -ErrorAction SilentlyContinue
+        }
+        catch {
+            if ($DEBUG_MODE) {  Write-Output "[-] Error while looking for Stored Credentials: $_" }
+        }
+    
+        foreach ($dbPath in $dbPaths) {
+            try {
+                $path = $dbPath.FullName
+                if (((Get-Acl "$path").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or ((Get-Acl "$path").Owner -match "$env:USERDOMAIN\\$env:USERNAME")) {
+                    $content = Get-Content -Path $dbPath.FullName -ErrorAction Stop -Raw
+                    if ($content -match "username|password") {
+                        Write-Output "[+] Grep Browser creds match, file is accessible! $($dbPath.FullName)"
                     }
                 }
             }
-        }
-        catch {
-            Write-Output "[-] Error while looking for Stored Credentials: $_"
+            catch {
+                if ($DEBUG_MODE) {  Write-Output "[-] Error while looking for Stored Credentials: $_" }
+            }
         }
 
     }
+    
     
     try {
         # RDP Cred
