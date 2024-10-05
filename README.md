@@ -12,7 +12,7 @@ CTF scripts like WinPEAS are awesome, but on real systems it can take forever to
 ## WIP - Work In Progress
 We just started working on this. Come back in 3 months or later - we already made good progress but are still far from what we'd like to deliver in the final version. 
 
-`Note:` ATM there's a ton of `C#` code at the beginning of the script, we'll weed that out before the first 1.0 release, and maybe make a light / stealth / powershell-only version. Just ignore it for now. 
+`Note:` ATM there's a ton of `C#` code at the beginning of the script, we'll weed that out before the first 1.0 release, and maybe make a light / stealth / powershell-only version. Just ignore it for now, some of it is actually used, some is experimental.
 
 ### TODO list
 - Certify
