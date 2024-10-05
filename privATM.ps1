@@ -1883,7 +1883,7 @@ function checkCreds {
             '*.pem', '*.p12', '*.jks', '*.secret', '*.bak', '*.dump',
             '*.db', '*.sqlite' -ErrorAction SilentlyContinue | 
             Where-Object { 
-                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|packages|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia' 
+                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|packages|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
