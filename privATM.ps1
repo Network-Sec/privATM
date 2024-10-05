@@ -1879,7 +1879,7 @@ function checkCreds {
         foreach ($dir in $dirsToSearch) {
             $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md, *.rtf, *.csv, *.xml, *.one, *.dcn -ErrorAction SilentlyContinue | 
             Where-Object { 
-                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|packages|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps' 
+                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|packages|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
