@@ -1871,15 +1871,18 @@ function checkCreds {
         Write-Output "[-] Error while looking for RDP creds"
     }
 
+    # Note: Adjust match and notmatch to your needs
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
-        $keywordPatterns = @('password', 'pwd', 'login', 'credentials', 'key', 'username', 'token')
+        $keywordPatterns = @('password', 'pwd', 'login', 'credentials', 'key', 'user', 'token','securestring', 'admin', 'root', '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
         foreach ($dir in $dirsToSearch) {
-            $files = Get-ChildItem -Path $dir -Recurse -Include *.txt, *.docx, *.ini, *.md, *.rtf, *.csv, *.xml, *.one, *.dcn -ErrorAction SilentlyContinue | 
+            $files = Get-ChildItem -Path $dir -Recurse -Include '*.txt', '*.docx', '*.ini', '*.md', '*.rtf', '*.csv', '*.xml', '*.one', '*.dcn', '*.env', '*.mailmap', '*.config', '*.yaml',
+            '*.yml', '*.json', '*.properties', '*.plist', '*.sh', '*.ps1', '*.py', '*.rb', '*.js', '*.bash', '*.password', '*.key', '*.pem', '*.p12', '*.jks', '*.secret', '*.bak', '*.dump',
+            '*.db', '*.sqlite' -ErrorAction SilentlyContinue | 
             Where-Object { 
-                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|packages|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton' 
+                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|packages|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
