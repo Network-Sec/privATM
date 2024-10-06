@@ -2119,7 +2119,8 @@ function checkCreds {
     # Note: Adjust match and notmatch to your needs
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
-        $keywordPatterns = @(
+        # Left in for clarity and easier adjustments
+        $keywordPatternsSingle = @(
             'password\s*[:=]',           
             'pwd\s*[:=]',                
             'user(?:name)?\s*[:=]',      
@@ -2132,6 +2133,10 @@ function checkCreds {
             'root\s*[:=]',               
             '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' 
         )
+
+        # We're using this single one for better speed
+        $keywordPatterns = 'password\s*[:=]|pwd\s*[:=]|user(?:name)?\s*[:=]|login\s*[:=]|credentials\s*[:=]|key(?:_?\w+)?\s*[:=]|token(?:_?\w+)?\s*[:=]|securestring\s*[:=]|admin\s*[:=]|root\s*[:=]|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+
         
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
@@ -2145,33 +2150,30 @@ function checkCreds {
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
             
-            Write-Output "[*] Files to search: $($files.Count)"
+            Write-Output "[*] Files to search in $($dir)`: $($files.Count)"
             foreach ($file in $files) {
                 $firstMatchPrinted = $false 
     
                 try {
-                    foreach ($pattern in $keywordPatterns) {
-                        if (-not $firstMatchPrinted) {  
-                            $findings = Select-String -Path $file.FullName -Pattern $pattern -ErrorAction Stop
-                            
-                            if ($findings) {
-                                $finding = $findings[0] 
-                                $line = $finding.Line
-                                $matchStart = $finding.Matches[0].Index
-                                $matchLength = $finding.Matches[0].Length
+                    if (-not $firstMatchPrinted) {  
+                        $findings = Select-String -Path $file.FullName -Pattern $keywordPatterns -ErrorAction Stop
+                        
+                        foreach ($finding in $findings) {
+                            $line = $finding.Line
+                            $matchStart = $finding.Matches[0].Index
+                            $matchLength = $finding.Matches[0].Length
     
-                                $startPos = [Math]::Max(0, $matchStart - 50)  
-                                $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)  
-
-                                $snippet = $line.Substring($startPos, $endPos - $startPos)
-
-                                Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
-                                Write-Output ""
-                                Write-Output "[+] File: $($file.FullName)"
-                                Write-Output "Line $($finding.LineNumber): $snippet"
-                                Write-Output ""
-                                $firstMatchPrinted = $true  
-                            }
+                            $startPos = [Math]::Max(0, $matchStart - 50)  
+                            $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)  
+    
+                            $snippet = $line.Substring($startPos, $endPos - $startPos)
+    
+                            Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
+                            Write-Output ""
+                            Write-Output "[+] File: $($file.FullName)"
+                            Write-Output "Line $($finding.LineNumber): $snippet"
+                            Write-Output ""
+                            $firstMatchPrinted = $true  
                         }
                     }
                 } catch {
