@@ -2331,21 +2331,28 @@ function checkCreds {
         # Combine the filename and extension matches into a single -Include and -Exclude array
         $includeList = @($sigFilenames + $sigExtensions)
 
-        $dirsToSearch = @("$env:USERPROFILE")#, "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
+        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
         $totalMatches = 0
         foreach ($dir in $dirsToSearch) {
             $files = Get-ChildItem -Path "$dir\*" -Attributes Directory,Hidden,Normal,NotContentIndexed,ReadOnly,System,Temporary  -Recurse -Include $includeList -Exclude $excludeList -ErrorAction SilentlyContinue |
             Where-Object { 
-                $_.FullName.ToLower() -notmatch 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale|powershell_transcript' 
+                $_.FullName.ToLower() -notmatch 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
-    
-            Write-Output "[*] Files to search: $($files.Count)"
+            
+            $totalFiles = $files.Count
+            Write-Output "[*] Files to search: $($totalFiles)"
+            $currentFileIndex = 0
             foreach ($file in $files) {
+                $currentFileIndex++
+
+                # Show progress
+                Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFiles in directory $dir" -PercentComplete (($currentFileIndex / $totalFiles) * 100)
+            
                 try {
                     $fileItem = Get-Item $file.FullName -ErrorAction SilentlyContinue
                     $fileSizeMB = if ($null -eq $fileItem) { 0 } else { [math]::round($fileItem.Length / 1MB, 2) }
@@ -2397,7 +2404,7 @@ function checkCreds {
                     if ($DEBUG_MODE) { Write-Output "Could not read file: $($file.FullName), Error: $_" }
                 }
             }
-            
+            Write-Progress -Activity "Processing Files" -Status "Completed" -Completed
         }
         
          # Prompt user in the console
