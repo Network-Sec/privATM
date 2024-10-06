@@ -8,6 +8,7 @@ $gCollect = @{
     UserDetails = @{}
     Privileges = @{}
     Groups = @{}
+    Credentials = @() 
     OtherData = @{}
 }
 
@@ -2116,34 +2117,224 @@ function checkCreds {
         }
     }
 
-    # Note: Adjust match and notmatch to your needs
+    # Note: Adjust patterns, include and exclude as needed. We currently experiment with more
+    # complex patterns, it's a fine line between 100k false-positives and missing the juicy ones
+    # Linux grep and especially zgrep are way faster and more powerfull, including archives makes sense
+    # but we feel we're hitting hardware limits. Strongly depends on target system, a CTF machine
+    # with hardly any user-created files could be scanned in seconds, including zips, a real system
+    # could take hours without zips. We tried to find a balance in between.
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
-        # Left in for clarity and easier adjustments
-        $keywordPatternsSingle = @(
-            'password\s*[:=]',           
-            'pwd\s*[:=]',                
-            'user(?:name)?\s*[:=]',      
-            'login\s*[:=]',              
-            'credentials\s*[:=]',        
-            'key(?:_?\w+)?\s*[:=]',      
-            'token(?:_?\w+)?\s*[:=]',    
-            'securestring\s*[:=]',       
-            'admin\s*[:=]',              
-            'root\s*[:=]',               
-            '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' 
+
+        $regexPatterns = @(
+            @{ type = 'contents'; regex = 'A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA[A-Z0-9]{16}'; name = 'AWS Access Key ID Value' },
+            @{ type = 'contents'; regex = 'aws_access_key_id\s{0,50}(:|=>|=)\s{0,50}(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'; name = 'AWS Access Key ID' },
+            @{ type = 'contents'; regex = 'aws_account_id\s{0,50}(:|=>|=)\s{0,50}[0-9]{4}-?[0-9]{4}-?[0-9]{4}'; name = 'AWS Account ID' },
+            @{ type = 'contents'; regex = 'aws_secret_access_key\s{0,50}(:|=>|=)\s{0,50}[A-Za-z0-9/+=]{40}'; name = 'AWS Secret Access Key' },
+            @{ type = 'contents'; regex = 'aws_session_token\s{0,50}(:|=>|=)\s{0,50}[A-Za-z0-9/+=]{16,}'; name = 'AWS Session Token' },
+            @{ type = 'contents'; regex = 'artifactory.{0,50}[0-9a-f]{112}'; name = 'Artifactory' },
+            @{ type = 'contents'; regex = 'codeclima.{0,50}[0-9a-f]{64}'; name = 'CodeClimate' },
+            @{ type = 'contents'; regex = 'EAACEdEose0cBA[0-9A-Za-z]+'; name = 'Facebook access token' },
+            @{ type = 'contents'; regex = 'type\s{0,50}(:|=>|=)\s{0,50}service_account'; name = 'Google (GCM) Service account' },
+            @{ type = 'contents'; regex = 'rk_[live|test]_[0-9a-zA-Z]{24}'; name = 'Stripe API key' },
+            @{ type = 'contents'; regex = '[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com'; name = 'Google OAuth Key' },
+            @{ type = 'contents'; regex = 'AIza[0-9A-Za-z\\-_]{35}'; name = 'Google Cloud API Key' },
+            @{ type = 'contents'; regex = 'ya29\\.[0-9A-Za-z\\-_]+'; name = 'Google OAuth Access Token' },
+            @{ type = 'contents'; regex = 'sk_[live|test]_[0-9a-z]{32}'; name = 'Picatic API key' },
+            @{ type = 'contents'; regex = 'sq0atp-[0-9A-Za-z\\-_]{22}'; name = 'Square Access Token' },
+            @{ type = 'contents'; regex = 'sq0csp-[0-9A-Za-z\\-_]{43}'; name = 'Square OAuth Secret' },
+            @{ type = 'contents'; regex = 'access_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}'; name = 'PayPal/Braintree Access Token' },
+            @{ type = 'contents'; regex = 'amzn\.mws\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; name = 'Amazon MWS Auth Token' },
+            @{ type = 'contents'; regex = 'SK[0-9a-fA-F]{32}'; name = 'Twilio API Key' },
+            @{ type = 'contents'; regex = 'SG\.[0-9A-Za-z\\-_]{22}\.[0-9A-Za-z\\-_]{43}'; name = 'SendGrid API Key' },
+            @{ type = 'contents'; regex = 'key-[0-9a-zA-Z]{32}'; name = 'MailGun API Key' },
+            @{ type = 'contents'; regex = '[0-9a-f]{32}-us[0-9]{12}'; name = 'MailChimp API Key' },
+            @{ type = 'contents'; regex = 'sshpass -p.*[''|``|"]'; name = 'SSH Password' },
+            @{ type = 'contents'; regex = 'https://outlook\.office\.com/webhook/[0-9a-f-]{36}\\@'; name = 'Outlook team' },
+            @{ type = 'contents'; regex = 'sauce.{0,50}[0-9a-f]{36}'; name = 'Sauce Token' },
+            @{ type = 'contents'; regex = 'xox[pboa]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32}'; name = 'Slack Token' },
+            @{ type = 'contents'; regex = 'https://hooks.slack.com/services/T[a-zA-Z0-9_]{8}/B[a-zA-Z0-9_]{8}/[a-zA-Z0-9_]{24}'; name = 'Slack Webhook' },
+            @{ type = 'contents'; regex = 'sonar.{0,50}[0-9a-f]{40}'; name = 'SonarQube Docs API Key' },
+            @{ type = 'contents'; regex = 'hockey.{0,50}[0-9a-f]{32}'; name = 'HockeyApp' },
+            @{ type = 'contents'; regex = '[\w+]{1,24}://([^$<]+):([^$<]+)@[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,24}([^\s]+)'; name = 'Username and password in URI' },
+            @{ type = 'contents'; regex = 'oy2[0-9]{43}'; name = 'NuGet API Key' },
+            @{ type = 'contents'; regex = 'hawk\.[0-9A-Za-z\-_]{20}\.[0-9A-Za-z\-_]{20}'; name = 'StackHawk API Key' },
+            @{ type = 'contents'; regex = '-----BEGIN (EC|RSA|DSA|OPENSSH|PGP) PRIVATE KEY'; name = 'Contains a private key' },
+            @{ type = 'contents'; regex = 'define(.{0,20})?(DB_CHARSET|NONCE_SALT|LOGGED_IN_SALT|AUTH_SALT|NONCE_KEY|DB_HOST|DB_PASSWORD|AUTH_KEY|SECURE_AUTH_KEY|LOGGED_IN_KEY|DB_NAME|DB_USER)(.{0,20})?[''"]{10,120}[''"]'; name = 'WP-Config' },
+            @{ type = 'contents'; regex = 'aws_access_key_id.{0,20}=.[0-9a-zA-Z\/+]{20,40}'; name = 'AWS cred file info' },
+            @{ type = 'contents'; regex = 'facebook.{0,20}[0-9a-f]{32}'; name = 'Facebook Secret Key' },
+            @{ type = 'contents'; regex = 'facebook.{0,20}EAACEdEose0cBA'; name = 'Facebook access token' },
+            @{ type = 'contents'; regex = 'facebook.{0,20}[0-9a-zA-Z]{10,60}'; name = 'Facebook API key' },
+            @{ type = 'contents'; regex = 'twitter.{0,20}[A-Za-z0-9_]{15,50}'; name = 'Twitter Access Token' },
+            @{ type = 'contents'; regex = 'mYCLp[0-9]{4}-[A-Z]{2}'; name = 'Acquia Token' }
+            @{ type = 'contents'; regex = 'user(?:name)?\s*[:=]\s*[''|``|"]'; name = 'user or username followed by colon or equal sign and string wrapped in quotes' },
+            @{ type = 'contents'; regex = 'password?\s*[:=]\s*[''|``|"]'; name = 'password followed by colon or equal sign and string wrapped in quotes' },
+            @{ type = 'contents'; regex = 'pwd?\s*[:=]\s*[''|``|"]'; name = 'pwd followed by colon or equal sign and string wrapped in quotes' },
+            @{ type = 'contents'; regex = '(?=.*\buser(?:name)?\b)(?=.*\bpassword\b)'; name = '"username" and "password" nearby' },
+            @{ type = 'contents'; regex = '(?=.*\buser(?:name)?\b)(?=.*\bpwd\b)'; name = '"username" and "pwd" nearby' },
+            @{ type = 'contents'; regex = '(?=.*\blogin\b)(?=.*\bcredentials\b)'; name = '"login" and "credentials" nearby' },
+            @{ type = 'contents'; regex = 'key(?:_?\w+)?\s*[:=]'; name = 'keys' },
+            @{ type = 'contents'; regex = 'token(?:_?\w+)?\s*[:=]'; name = 'tokens' },
+            @{ type = 'contents'; regex = 'securestring\s*[:=]'; name = 'securestrings' },
+            @{ type = 'contents'; regex = 'admin\s*[:=]'; name = 'admin' },
+            @{ type = 'contents'; regex = 'root\s*[:=]'; name = 'root' },
+            @{ type = 'contents'; regex = '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'; name = 'email addresses' },
+            @{ type = 'contents'; regex = 'access_token\s*[:=]'; name = 'access tokens' },
+            @{ type = 'contents'; regex = 'api_key\s*[:=]'; name = 'API keys' },
+            @{ type = 'contents'; regex = 'session_id\s*[:=]'; name = 'session IDs' },
+            @{ type = 'contents'; regex = 'ssh\s+\S+@\S+'; name = 'SSH logins' },
+            @{ type = 'contents'; regex = '-----BEGIN (PRIVATE|RSA) KEY-----'; name = 'private key identifiers' }
+        )
+        
+        $signatures = @(
+            @{ type = 'extension'; match = '*.txt'; name = 'Text file' },
+            @{ type = 'extension'; match = '*.docx'; name = 'Word Document' },
+            @{ type = 'extension'; match = '*.ini'; name = 'INI File' },
+            @{ type = 'extension'; match = '*.md'; name = 'Markdown File' },
+            @{ type = 'extension'; match = '*.rtf'; name = 'Rich Text Format' },
+            @{ type = 'extension'; match = '*.csv'; name = 'Comma-Separated Values' },
+            @{ type = 'extension'; match = '*.xml'; name = 'XML File' },
+            @{ type = 'extension'; match = '*.one'; name = 'OneNote File' },
+            @{ type = 'extension'; match = '*.dcn'; name = 'DCN File' },
+            @{ type = 'extension'; match = '*.env'; name = 'Environment File' },
+            @{ type = 'extension'; match = '*.mailmap'; name = 'Mailmap File' },
+            @{ type = 'extension'; match = '*.config'; name = 'Configuration File' },
+            @{ type = 'extension'; match = '*.yaml'; name = 'YAML File' },
+            @{ type = 'extension'; match = '*.yml'; name = 'YAML File (alternative)' },
+            @{ type = 'extension'; match = '*.json'; name = 'JSON File' },
+            @{ type = 'extension'; match = '*.properties'; name = 'Properties File' },
+            @{ type = 'extension'; match = '*.plist'; name = 'Property List File' },
+            @{ type = 'extension'; match = '*.sh'; name = 'Shell Script' },
+            @{ type = 'extension'; match = '*.ps1'; name = 'PowerShell Script' },
+            @{ type = 'extension'; match = '*.py'; name = 'Python Script' },
+            @{ type = 'extension'; match = '*.rb'; name = 'Ruby Script' },
+            @{ type = 'extension'; match = '*.js'; name = 'JavaScript File' },
+            @{ type = 'extension'; match = '*.bash'; name = 'Bash Script' },
+            @{ type = 'extension'; match = '*.password'; name = 'Password File' },
+            @{ type = 'extension'; match = '*.key'; name = 'Key File' },
+            @{ type = 'extension'; match = '*.pem'; name = 'Potential cryptographic private key' },
+            @{ type = 'extension'; match = '*.log'; name = 'Log file' },
+            @{ type = 'extension'; match = '*.pkcs12'; name = 'Potential cryptographic key bundle' },
+            @{ type = 'extension'; match = '*.p12'; name = 'Potential cryptographic key bundle' },
+            @{ type = 'extension'; match = '*.pfx'; name = 'Potential cryptographic key bundle' },
+            @{ type = 'extension'; match = '*.asc'; name = 'Potential cryptographic key bundle' },
+            @{ type = 'extension'; match = '*.ovpn'; name = 'OpenVPN client configuration file' },
+            @{ type = 'extension'; match = '*.id_rsa'; name = 'Potential SSH private key' },
+            @{ type = 'extension'; match = '*.id_dsa'; name = 'Potential SSH private key' },
+            @{ type = 'extension'; match = '*.id_ecdsa'; name = 'Potential SSH private key' },
+            @{ type = 'extension'; match = '*.id_ed25519'; name = 'Potential SSH private key' },
+            @{ type = 'extension'; match = '*.id_rsa.pub'; name = 'Potential SSH public key' },
+            @{ type = 'extension'; match = '*.id_dsa.pub'; name = 'Potential SSH public key' },
+            @{ type = 'extension'; match = '*.id_ecdsa.pub'; name = 'Potential SSH public key' },
+            @{ type = 'extension'; match = '*.id_ed25519.pub'; name = 'Potential SSH public key' },
+            @{ type = 'extension'; match = '*.id_rsa_old'; name = 'Potential old SSH private key' },
+            @{ type = 'extension'; match = '*.id_rsa_backup'; name = 'Potential backup SSH private key' },
+            @{ type = 'extension'; match = '*.id_ecdsa_old'; name = 'Potential old SSH private key' },
+            @{ type = 'extension'; match = '*.id_ed25519_backup'; name = 'Potential backup SSH private key' },
+            @{ type = 'extension'; match = '*.id_rsa_temp'; name = 'Potential temporary SSH private key' },
+            @{ type = 'extension'; match = '*.id_dsa_temp'; name = 'Potential temporary SSH private key' },
+            @{ type = 'extension'; match = '*.ssh_key'; name = 'Potential SSH key' },
+            @{ type = 'extension'; match = '*.ssh_key.pub'; name = 'Potential SSH public key' },
+            @{ type = 'extension'; match = '*.cscfg'; name = 'Azure service configuration schema file' },
+            @{ type = 'extension'; match = '*.rdp'; name = 'Remote Desktop connection file' },
+            @{ type = 'extension'; match = '*.mdf'; name = 'Microsoft SQL database file' },
+            @{ type = 'extension'; match = '*.sdf'; name = 'Microsoft SQL server compact database file' },
+            @{ type = 'extension'; match = '*.sqlite'; name = 'SQLite database file' },
+            @{ type = 'extension'; match = '*.sqlite3'; name = 'SQLite3 database file' },
+            @{ type = 'extension'; match = '*.bek'; name = 'Microsoft BitLocker recovery key file' },
+            @{ type = 'extension'; match = '*.tpm'; name = 'Microsoft BitLocker Trusted Platform Module password file' },
+            @{ type = 'extension'; match = '*.fve'; name = 'Windows BitLocker full volume encrypted data file' },
+            @{ type = 'extension'; match = '*.jks'; name = 'Java keystore file' },
+            @{ type = 'extension'; match = '*.psafe3'; name = 'Password Safe database file' },
+            @{ type = 'extension'; match = '*.agilekeychain'; name = '1Password password manager database file' },
+            @{ type = 'extension'; match = '*.keychain'; name = 'Apple Keychain database file' },
+            @{ type = 'extension'; match = '*.pcap'; name = 'Network traffic capture file' },
+            @{ type = 'extension'; match = '*.gnucash'; name = 'GnuCash database file' },
+            @{ type = 'extension'; match = '*.kwallet'; name = 'KDE Wallet Manager database file' },
+            @{ type = 'extension'; match = '*.tblk'; name = 'Tunnelblick VPN configuration file' },
+            @{ type = 'extension'; match = '*.dayone'; name = 'Day One journal file' },
+            @{ type = 'extension'; match = '*.keypair'; name = 'Potential cryptographic private key' },
+            @{ type = 'extension'; match = '*.keystore'; name = 'GNOME Keyring database file' },
+            @{ type = 'extension'; match = '*.keyring'; name = 'GNOME Keyring database file' },
+            @{ type = 'extension'; match = '*.sql'; name = 'SQL dump file' },
+            @{ type = 'extension'; match = '*.ppk'; name = 'Potential PuTTYgen private key' },
+            @{ type = 'extension'; match = '*.sqldump'; name = 'SQL Data dump file' }        
+            @{ type = 'filename'; match = 'otr.private_key'; name = 'Pidgin OTR private key' },
+            @{ type = 'filename'; match = 'id_rsa'; name = 'Potential SSH private key' },
+            @{ type = 'filename'; match = 'id_dsa'; name = 'Potential SSH private key' },
+            @{ type = 'filename'; match = 'id_ecdsa'; name = 'Potential SSH private key' },
+            @{ type = 'filename'; match = 'id_ed25519'; name = 'Potential SSH private key' },
+            @{ type = 'filename'; match = 'id_rsa.pub'; name = 'Potential SSH public key' },
+            @{ type = 'filename'; match = 'id_dsa.pub'; name = 'Potential SSH public key' },
+            @{ type = 'filename'; match = 'id_ecdsa.pub'; name = 'Potential SSH public key' },
+            @{ type = 'filename'; match = 'id_ed25519.pub'; name = 'Potential SSH public key' },
+            @{ type = 'filename'; match = 'id_rsa_old'; name = 'Potential old SSH private key' },
+            @{ type = 'filename'; match = 'id_rsa_backup'; name = 'Potential backup SSH private key' },
+            @{ type = 'filename'; match = 'id_ecdsa_old'; name = 'Potential old SSH private key' },
+            @{ type = 'filename'; match = 'id_ed25519_backup'; name = 'Potential backup SSH private key' },
+            @{ type = 'filename'; match = 'id_rsa_temp'; name = 'Potential temporary SSH private key' },
+            @{ type = 'filename'; match = 'id_dsa_temp'; name = 'Potential temporary SSH private key' },
+            @{ type = 'filename'; match = 'ssh_key'; name = 'Potential SSH key' },
+            @{ type = 'filename'; match = 'ssh_key.pub'; name = 'Potential SSH public key' },
+            @{ type = 'filename'; match = 'secret_token.rb'; name = 'Ruby On Rails secret token configuration file' },
+            @{ type = 'filename'; match = 'carrierwave.rb'; name = 'Carrierwave configuration file' },
+            @{ type = 'filename'; match = 'database.yml'; name = 'Potential Ruby On Rails database configuration file' },
+            @{ type = 'filename'; match = 'omniauth.rb'; name = 'OmniAuth configuration file' },
+            @{ type = 'filename'; match = 'settings.py'; name = 'Django configuration file' },
+            @{ type = 'filename'; match = 'jenkins.plugins.publish_over_ssh.BapSshPublisherPlugin.xml'; name = 'Jenkins publish over SSH plugin file' },
+            @{ type = 'filename'; match = 'credentials.xml'; name = 'Potential Jenkins credentials file' },
+            @{ type = 'filename'; match = 'LocalSettings.php'; name = 'Potential MediaWiki configuration file' },
+            @{ type = 'filename'; match = 'Favorites.plist'; name = 'Sequel Pro MySQL database manager bookmark file' },
+            @{ type = 'filename'; match = 'configuration.user.xpl'; name = 'Little Snitch firewall configuration file' },
+            @{ type = 'filename'; match = 'journal.txt'; name = 'Potential jrnl journal file' },
+            @{ type = 'filename'; match = 'knife.rb'; name = 'Chef Knife configuration file' },
+            @{ type = 'filename'; match = 'proftpdpasswd'; name = 'cPanel backup ProFTPd credentials file' },
+            @{ type = 'filename'; match = 'robomongo.json'; name = 'Robomongo MongoDB manager configuration file' },
+            @{ type = 'filename'; match = '*.rsa'; name = 'Private SSH key' },
+            @{ type = 'filename'; match = '*.dsa'; name = 'Private SSH key' },
+            @{ type = 'filename'; match = '*.ed25519'; name = 'Private SSH key' },
+            @{ type = 'filename'; match = '*.ecdsa'; name = 'Private SSH key' },
+            @{ type = 'filename'; match = '.*history'; name = 'Shell command history file' },
+            @{ type = 'filename'; match = '*.mysql_history'; name = 'MySQL client command history file' },
+            @{ type = 'filename'; match = '*.psql_history'; name = 'PostgreSQL client command history file' },
+            @{ type = 'filename'; match = '*.pgpass'; name = 'PostgreSQL password file' },
+            @{ type = 'filename'; match = '*.irb_history'; name = 'Ruby IRB console history file' },
+            @{ type = 'filename'; match = '*.dbeaver-data-sources.xml'; name = 'DBeaver SQL database manager configuration file' },
+            @{ type = 'filename'; match = '*.muttrc'; name = 'Mutt e-mail client configuration file' },
+            @{ type = 'filename'; match = '*.s3cfg'; name = 'S3cmd configuration file' },
+            @{ type = 'filename'; match = 'sftp-config.json'; name = 'SFTP connection configuration file' },
+            @{ type = 'filename'; match = '*.trc'; name = 'T command-line Twitter client configuration file' },
+            @{ type = 'filename'; match = 'config*.php'; name = 'PHP configuration file' },
+            @{ type = 'filename'; match = '*.htpasswd'; name = 'Apache htpasswd file' },
+            @{ type = 'filename'; match = '*.tugboat'; name = 'Tugboat DigitalOcean management tool configuration' },
+            @{ type = 'filename'; match = '*.git-credentials'; name = 'git-credential-store helper credentials file' },
+            @{ type = 'filename'; match = '*.gitconfig'; name = 'Git configuration file' },
+            @{ type = 'filename'; match = '*.env'; name = 'Environment configuration file' },
+            @{ type = 'filename'; match = 'heroku.json'; name = 'Heroku config file' },
+            @{ type = 'filename'; match = 'dump.sql'; name = 'MySQL dump w/ bcrypt hashes' },
+            @{ type = 'filename'; match = 'id_rsa_pub'; name = 'Public ssh key' },
+            @{ type = 'filename'; match = '.remote-sync.json'; name = 'Created by remote-sync for Atom, contains FTP and/or SCP/SFTP/SSH server details and credentials' },
+            @{ type = 'filename'; match = '.esmtprc'; name = 'esmtp configuration' },
+            @{ type = 'filename'; match = 'deployment-config.json'; name = 'Created by sftp-deployment for Atom, contains server details and credentials' },
+            @{ type = 'filename'; match = '.ftpconfig'; name = 'Created by sftp-deployment for Atom, contains server details and credentials' }
         )
 
-        # We're using this single one for better speed
-        $keywordPatterns = 'password\s*[:=]|pwd\s*[:=]|user(?:name)?\s*[:=]|login\s*[:=]|credentials\s*[:=]|key(?:_?\w+)?\s*[:=]|token(?:_?\w+)?\s*[:=]|securestring\s*[:=]|admin\s*[:=]|root\s*[:=]|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        $excludeList  = @('*.exe', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.tiff', '*.tif', '*.psd', '*.xcf', '*.zip', '*.tar.gz', '*.ttf', '*.lock')
 
-        
+        # Build the -Include string dynamically from the $signatures array
+        $sigFilenames = $signatures | Where-Object { $_.type -eq 'filename' } | ForEach-Object { $_.match }
+        $sigExtensions = $signatures | Where-Object { $_.type -eq 'extension' } | ForEach-Object { $_.match }
+
+        # Combine the filename and extension matches into a single -Include and -Exclude array
+        $includeList = @($sigFilenames + $sigExtensions)
+
         $dirsToSearch = @("$env:USERPROFILE")#, "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
+        $totalMatches = 0
         foreach ($dir in $dirsToSearch) {
-            $files = Get-ChildItem -Path $dir -Recurse -Include '*.txt', '*.docx', '*.ini', '*.md', '*.rtf', '*.csv', '*.xml', '*.one', '*.dcn', '*.env', '*.mailmap', '*.config', '*.yaml', '*.yml', '*.json', '*.properties', '*.plist', '*.sh', '*.ps1', '*.py', '*.rb', '*.js', '*.bash', '*.password', '*.key', '*.pem', '*.p12', '*.jks', '*.secret', '*.bak', '*.dump', '*.db', '*.sqlite' -ErrorAction SilentlyContinue |
+            $files = Get-ChildItem -Path "$dir\*" -Attributes Directory,Hidden,Normal,NotContentIndexed,ReadOnly,System,Temporary  -Recurse -Include $includeList -Exclude $excludeList -ErrorAction SilentlyContinue |
             Where-Object { 
-                $_.FullName.ToLower() -notmatch 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale' 
+                $_.FullName.ToLower() -notmatch 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale|powershell_transcript' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
@@ -2153,10 +2344,16 @@ function checkCreds {
             Write-Output "[*] Files to search: $($files.Count)"
             foreach ($file in $files) {
                 try {
-                    $findings = Select-String -Path $file.FullName -Pattern $keywordPatterns -ErrorAction Stop
+                    $findings = Select-String -Path $file.FullName -Pattern $regexPatterns.regex -ErrorAction Stop
                     $matchCount = $findings.Count
     
                     if ($matchCount -gt 0) {
+                        $totalMatches += $matchCount
+                         # Add all findings to the global object
+                        $gCollect.Credentials += [PSCustomObject]@{
+                            FileName     = $file.FullName
+                            Matches      = $finding | Select-Object -First 25 | ForEach-Object { $_.Matches } # We limit this a bit for a reason
+                        }
                         # Display the first match
                         $firstFinding = $findings[0]
                         $line = $firstFinding.Line
@@ -2186,7 +2383,11 @@ function checkCreds {
             }
         }
         
-        
+         # Prompt user in the console
+        $userResponse = Read-Host "[?] If you're in a desktop session, should we display all findings in a new Desktop-Window (y/n)?"
+        if (($userResponse -eq 'y') -and ($totalMatches -gt 0)) {
+            $gCollect.Credentials | Out-GridView -Title "Credential Findings"
+        }
     } catch {
         if ($DEBUG_MODE) { Write-Output "[-] Error while grepping for creds" }
     }    
