@@ -2120,20 +2120,19 @@ function checkCreds {
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
         $keywordPatterns = @(
-            'password\s*[:=]',      
-            'pwd\s*[:=]',           
-            'user(?:name)?\s*[:=]', 
-            'login\s*[:=]',         
-            'credentials\s*[:=]',   
-            'key\s*[:=]',           
-            'token\s*[:=]',         
-            'securestring\s*[:=]',  
-            'admin\s*[:=]',         
-            'root\s*[:=]',          
+            'password\s*[:=]',           
+            'pwd\s*[:=]',                
+            'user(?:name)?\s*[:=]',      
+            'login\s*[:=]',              
+            'credentials\s*[:=]',        
+            'key(?:_?\w+)?\s*[:=]',      
+            'token(?:_?\w+)?\s*[:=]',    
+            'securestring\s*[:=]',       
+            'admin\s*[:=]',              
+            'root\s*[:=]',               
             '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' 
         )
         
-
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
         foreach ($dir in $dirsToSearch) {
@@ -2148,30 +2147,28 @@ function checkCreds {
             
             Write-Output "[*] Files to search: $($files.Count)"
             foreach ($file in $files) {
-                $firstMatchPrinted = $false  # Flag to limit output to one match per file
+                $firstMatchPrinted = $false 
     
                 try {
                     foreach ($pattern in $keywordPatterns) {
-                        if (-not $firstMatchPrinted) {  # Check if we already printed a match for this file
-                            $findings = Select-String -Path $file.FullName -Pattern $pattern -SimpleMatch -ErrorAction Stop
+                        if (-not $firstMatchPrinted) {  
+                            $findings = Select-String -Path $file.FullName -Pattern $pattern -ErrorAction Stop
                             
                             if ($findings) {
-                                $finding = $findings[0]  # Only take the first finding
+                                $finding = $findings[0] 
                                 $line = $finding.Line
                                 $matchStart = $finding.Matches[0].Index
                                 $matchLength = $finding.Matches[0].Length
     
-                                # Calculate the boundaries for the snippet
                                 $startPos = [Math]::Max(0, $matchStart - 50)  
                                 $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)  
-    
-                                # Extract the portion from the line
+
                                 $snippet = $line.Substring($startPos, $endPos - $startPos)
     
                                 Write-Output "[+] Grep pattern '$pattern' match in file: $($file.FullName)"
                                 Write-Output "Line $($finding.LineNumber): $snippet"
     
-                                $firstMatchPrinted = $true  # Prevent further matches in this file from being printed
+                                $firstMatchPrinted = $true  
                             }
                         }
                     }
