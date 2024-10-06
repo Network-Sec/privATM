@@ -2349,16 +2349,23 @@ function checkCreds {
             $currentFileIndex = 0
             foreach ($file in $files) {
                 $currentFileIndex++
-
-                # Show progress
-                Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFiles in directory $dir" -PercentComplete (($currentFileIndex / $totalFiles) * 100)
-            
+                $fileSizeMB = 0
                 try {
                     $fileItem = Get-Item $file.FullName -ErrorAction SilentlyContinue
                     $fileSizeMB = if ($null -eq $fileItem) { 0 } else { [math]::round($fileItem.Length / 1MB, 2) }
-                    
-                    if ($fileSizeMB -eq 0) { continue }
+                }
+                catch {
+                    if ($DEBUG_MODE) { 
+                        Write-Output "[!] Error getting file size for: $($file.FullName)" 
+                    }
+                }
 
+                if ($fileSizeMB -eq 0) { continue }
+
+                # Show progress
+                Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFiles - $file - $fileSizeMB MB" -PercentComplete (($currentFileIndex / $totalFiles) * 100)
+            
+                try {
                     if ($fileSizeMB -gt 2) {
                         Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                         Write-Output ""
@@ -2366,16 +2373,19 @@ function checkCreds {
                         Write-Output "Filename / Extension match. Filesize: $fileSizeMB MB, skipping content scan."
                         Write-Output ""
                     } else {
-                        $findings = Select-String -Path $file.FullName -Pattern $regexPatterns.regex -ErrorAction Stop
+                        $findings = Get-Content -Path $file.FullName -ErrorAction Stop | Select-String -Pattern $regexPatterns.regex -ErrorAction Stop
                         $matchCount = $findings.Count
             
                         if ($matchCount -gt 0) {
                             $totalMatches += $matchCount
-                            # Add all findings to the global object
+                            $firstCoupleMatches = $findings | Select-Object -First 25 | ForEach-Object { $_.Matches } 
+
+                            # Add findings to the global object
                             $gCollect.Credentials += [PSCustomObject]@{
                                 FileName = $file.FullName
-                                Matches  = $findings | Select-Object -First 25 | ForEach-Object { $_.Matches } # Limit this for a reason
+                                Matches  = $firstCoupleMatches
                             }
+
                             # Display the first match
                             $firstFinding = $findings[0]
                             $line = $firstFinding.Line
