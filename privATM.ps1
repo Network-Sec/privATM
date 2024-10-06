@@ -2164,10 +2164,12 @@ function checkCreds {
                                 $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)  
 
                                 $snippet = $line.Substring($startPos, $endPos - $startPos)
-    
+
+                                Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
+                                Write-Output ""
                                 Write-Output "[+] File: $($file.FullName)"
                                 Write-Output "Line $($finding.LineNumber): $snippet"
-    
+                                Write-Output ""
                                 $firstMatchPrinted = $true  
                             }
                         }
