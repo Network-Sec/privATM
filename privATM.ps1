@@ -80,6 +80,201 @@ using System.Collections;
 using System.Text;
 using System.Diagnostics;
 
+public class TokPriv
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TOKEN_GROUPS_AND_PRIVILEGES
+    {
+        public uint SidCount;
+        public uint SidLength;
+        public IntPtr Sids;
+        public uint RestrictedSidCount;
+        public uint RestrictedSidLength;
+        public IntPtr RestrictedSids;
+        public uint PrivilegeCount;
+        public uint PrivilegeLength;
+        public IntPtr Privileges;
+        public LUID AuthenticationID;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LUID_AND_ATTRIBUTES
+    {
+        public LUID Luid;
+        public uint Attributes;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LUID
+    {
+        public uint LowPart;
+        public int HighPart;
+    }
+
+    public enum TOKEN_INFORMATION_CLASS
+    {
+        TokenUser = 1,
+        TokenGroups,
+        TokenPrivileges,
+        TokenOwner,
+        TokenPrimaryGroup,
+        TokenDefaultDacl,
+        TokenSource,
+        TokenType,
+        TokenImpersonationLevel,
+        TokenStatistics,
+        TokenRestrictedSids,
+        TokenSessionId,
+        TokenGroupsAndPrivileges,
+        TokenSessionReference,
+        TokenSandBoxInert,
+        TokenAuditPolicy,
+        TokenOrigin
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TOKEN_PRIVILEGES
+    {
+        public uint PrivilegeCount;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 1)]
+        public LUID_AND_ATTRIBUTES[] Privileges;
+    }
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool AdjustTokenPrivileges(
+        IntPtr TokenHandle,
+        bool DisableAllPrivileges,
+        ref TOKEN_PRIVILEGES NewState,
+        uint BufferLength,
+        IntPtr PreviousState,
+        IntPtr ReturnLength);
+
+    [DllImport("Advapi32.dll", EntryPoint = "LookupPrivilegeNameW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool LookupPrivilegeName(string SystemName, ref LUID LUID, StringBuilder PrivilegeName, ref uint NameLength);
+
+    [DllImport("Advapi32.dll", EntryPoint = "LookupPrivilegeValueW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool LookupPrivilegeValue(string SystemName, string Name, out LUID LUID);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool OpenProcessToken(IntPtr ProcessHandle,
+    UInt32 DesiredAccess, out IntPtr TokenHandle);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetCurrentProcess();
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool GetTokenInformation(IntPtr TokenHandle,
+        TOKEN_INFORMATION_CLASS TokenInformationClass,
+        IntPtr TokenInformation,
+        Int32 TokenInformationLength,
+        out Int32 ReturnLength);
+
+    public static UInt32 TOKEN_ADJUST_PRIVILEGES = 0x0020;
+    public static UInt32 TOKEN_QUERY = 0x0008;
+    public static List<string> PrintPrivs()
+    {
+        List<string> privilegeNames = new List<string>();
+
+        IntPtr token;
+        bool ret = OpenProcessToken(GetCurrentProcess(), 0x0008 /* TOKEN_QUERY */, out token); // TOKEN_QUERY = 0x0008
+
+        if (!ret)
+        {
+            throw new InvalidOperationException("Failed to open process token. Ensure you have sufficient privileges.");
+        }
+
+        try
+        {
+            Int32 returnLength;
+            ret = GetTokenInformation(token, TOKEN_INFORMATION_CLASS.TokenGroupsAndPrivileges, IntPtr.Zero, 0, out returnLength);
+
+            if (!ret && Marshal.GetLastWin32Error() != 122) // ERROR_INSUFFICIENT_BUFFER
+            {
+                throw new InvalidOperationException("Failed to get token information length.");
+            }
+
+            IntPtr pGroupsAndPrivilegesInfo = Marshal.AllocHGlobal(returnLength);
+            try
+            {
+                ret = GetTokenInformation(token, TOKEN_INFORMATION_CLASS.TokenGroupsAndPrivileges, pGroupsAndPrivilegesInfo, returnLength, out returnLength);
+                if (!ret)
+                {
+                    throw new InvalidOperationException("Failed to get token information.");
+                }
+
+                TOKEN_GROUPS_AND_PRIVILEGES groupsAndPrivilegesInfo = (TOKEN_GROUPS_AND_PRIVILEGES)Marshal.PtrToStructure(pGroupsAndPrivilegesInfo, typeof(TOKEN_GROUPS_AND_PRIVILEGES));
+
+                for (int i = 0; i < groupsAndPrivilegesInfo.PrivilegeCount; i++)
+                {
+                    LUID_AND_ATTRIBUTES privilege = (LUID_AND_ATTRIBUTES)Marshal.PtrToStructure(groupsAndPrivilegesInfo.Privileges + i * Marshal.SizeOf(typeof(LUID_AND_ATTRIBUTES)), typeof(LUID_AND_ATTRIBUTES));
+                    StringBuilder name = new StringBuilder(50);
+                    uint cchName = 50;
+                    ret = LookupPrivilegeName(null, ref privilege.Luid, name, ref cchName);
+                    if (ret)
+                    {
+                        privilegeNames.Add(name.ToString());
+                    }
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(pGroupsAndPrivilegesInfo);
+            }
+        }
+        finally
+        {
+            CloseHandle(token);
+        }
+
+        return privilegeNames;
+    }
+
+    public static void AddPrivs(params string[] privileges)
+    {
+        bool ret = false;
+        IntPtr token;
+        ret = OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out token);
+        if (!ret)
+        {
+            Console.WriteLine("Failed to open process token with error: " + Marshal.GetLastWin32Error());
+            return;
+        }
+
+        foreach (string priv in privileges)
+        {
+            LUID luid = new LUID();
+            ret = LookupPrivilegeValue(null, priv, out luid);
+            if (!ret)
+            {
+                Console.WriteLine("Failed to look up privilege: {1} with error code: {0} ", Marshal.GetLastWin32Error(), priv);
+                continue;
+            }
+
+            TOKEN_PRIVILEGES tp = new TOKEN_PRIVILEGES();
+            tp.PrivilegeCount = 1;
+            tp.Privileges = new LUID_AND_ATTRIBUTES[1];
+            tp.Privileges[0].Luid = luid;
+            tp.Privileges[0].Attributes = 0x00000002; // SE_PRIVILEGE_ENABLED
+
+            ret = AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+            if (!ret || Marshal.GetLastWin32Error() != 0)
+            {
+                Console.WriteLine("Failed to adjust privilege: {1} with error code: {0}", Marshal.GetLastWin32Error(), priv);
+            }
+            else
+            {
+                Console.WriteLine("Successfully added privilege: {0}", priv);
+            }
+        }
+    }
+}
+
 public class DriverLoader
 {
     [DllImport("ntdll.dll")]
@@ -1225,6 +1420,54 @@ function checkSePrivileges {
 function trySePrivileges {
     if ($DEBUG_MODE) { Write-Output "Trying to use SePrivileges..." }
 
+    # Receive Privs via C# and try to add new privs on-the-fly (experimental stuff)
+    Write-Host ("-" * $Host.UI.RawUI.WindowSize.Width)
+    Write-Host ""
+    Write-Host "[$([char]0xD83D + [char]0xDC80)] Running experimental method to receive and add Se-Privs to running process (usually needs NT-Authority)"
+    Write-Host "[*] Checking Current Process Privileges via custom C# implementation (no whois)"
+
+    # Returns from c# List<string> privilegeNames = new List<string>();
+    $currentPrivs = @([TokPriv]::PrintPrivs())
+    $currentPrivs.foreach({Write-Host $_})
+
+    # Define the mandatory privileges for AddPrivs() to work
+    $requiredPrivs = @("SeDebugPrivilege", "SeImpersonatePrivilege") 
+    # By definition also needs "SeAssignPrimaryTokenPrivilege" - but not even System has that by default
+
+    # Check if all required privileges are present (case-insensitive comparison)
+    $missingPrivs = $requiredPrivs | Where-Object { $_ -notin $currentPrivs }
+
+    # If no missing privileges, proceed
+    if ($missingPrivs.Count -eq 0) {
+        Write-Host ""
+        Write-Host "[+] All required privileges are present. Attempting to add SeTakeOwnershipPrivilege..."
+        Write-Host ""
+
+        # Try to add SeTakeOwnershipPrivilege
+        $success = [TokPriv]::AddPrivs('SeTakeOwnershipPrivilege')
+        
+        if ($success) {
+            Write-Host "[!] Success: SeTakeOwnershipPrivilege added!" -ForegroundColor Green
+        } else {
+            Write-Host "[-] Failed: Could not add SeTakeOwnershipPrivilege." -ForegroundColor Red
+        }
+
+        # Print final state of privileges after adding
+        Write-Host "Final State of Privileges:"
+        [TokPriv]::PrintPrivs() | ForEach-Object { Write-Host $_ }
+
+    } else {
+        # If any required privileges are missing, print what's missing
+        Write-Host ""
+        Write-Host "[-] You are missing the following privileges for AddPrivs() to work:" -ForegroundColor Yellow
+        $missingPrivs | ForEach-Object { Write-Host $_ }
+        Write-Host ""
+        Write-Host "Exiting Experimental Space..." -ForegroundColor Red
+    }
+
+    Write-Host ""
+    Write-Host ("-" * $Host.UI.RawUI.WindowSize.Width)
+
     # Loop over $gCollect['Privileges'][$priv.name]
     foreach ($privName in $gCollect['Privileges'].Keys) {
         switch ($privName) {
@@ -1851,26 +2094,28 @@ function checkCreds {
 
     }
     
-    
-    try {
-        # RDP Cred
-        Write-Output "[$([char]0xD83D + [char]0xDC80)] Looking for RDP creds"
-        $rdpCreds = Get-ChildItem "HKCU:\Software\Microsoft\Terminal Server Client\Servers" | ForEach-Object {
-            $serverName = $_.PSChildName
-            $userName = Get-ItemProperty $_.PSPath | Select-Object -ExpandProperty UsernameHint
-            [PSCustomObject]@{
-                Server = $serverName
-                Username = $userName
+    # This is working, but atm disabled, cause we had strange crashes several times, maybe coincidental?
+    if ($false) {
+        try {
+            # RDP Cred
+            Write-Output "[$([char]0xD83D + [char]0xDC80)] Looking for RDP creds"
+            $rdpCreds = Get-ChildItem "HKCU:\Software\Microsoft\Terminal Server Client\Servers" | ForEach-Object {
+                $serverName = $_.PSChildName
+                $userName = Get-ItemProperty $_.PSPath | Select-Object -ExpandProperty UsernameHint
+                [PSCustomObject]@{
+                    Server = $serverName
+                    Username = $userName
+                }
             }
+            Write-Output "[+] RDP Creds found, may take a second to list..."
+            Write-Output $rdpCreds
+            Write-Output ""
         }
-        Write-Output "[+] RDP Creds found, may take a second to list..."
-        Write-Output $rdpCreds
-        Write-Output ""
+        catch {
+            Write-Output "[-] Error while looking for RDP creds"
+        }
     }
-    catch {
-        Write-Output "[-] Error while looking for RDP creds"
-    }
-
+    
     # Note: Adjust match and notmatch to your needs
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
@@ -1878,12 +2123,9 @@ function checkCreds {
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
         foreach ($dir in $dirsToSearch) {
-            $files = Get-ChildItem -Path $dir -Recurse -Include '*.txt', '*.docx', '*.ini', '*.md', '*.rtf', '*.csv', '*.xml', '*.one', '*.dcn', '*.env', '*.mailmap', '*.config', '*.yaml',
-            '*.yml', '*.json', '*.properties', '*.plist', '*.sh', '*.ps1', '*.py', '*.rb', '*.js', '*.bash', '*.password', '*.key', 
-            '*.pem', '*.p12', '*.jks', '*.secret', '*.bak', '*.dump',
-            '*.db', '*.sqlite' -ErrorAction SilentlyContinue | 
+            $files = Get-ChildItem -Path $dir -Recurse -Include '*.txt', '*.docx', '*.ini', '*.md', '*.rtf', '*.csv', '*.xml', '*.one', '*.dcn', '*.env', '*.mailmap', '*.config', '*.yaml', '*.yml', '*.json', '*.properties', '*.plist', '*.sh', '*.ps1', '*.py', '*.rb', '*.js', '*.bash', '*.password', '*.key', '*.pem', '*.p12', '*.jks', '*.secret', '*.bak', '*.dump', '*.db', '*.sqlite' -ErrorAction SilentlyContinue |
             Where-Object { 
-                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|packages|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization' 
+                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
