@@ -2119,32 +2119,69 @@ function checkCreds {
     # Note: Adjust match and notmatch to your needs
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
-        $keywordPatterns = @('password', 'pwd', 'login', 'credentials', 'key', 'user', 'token','securestring', 'admin', 'root', '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+        $keywordPatterns = @(
+            'password\s*[:=]',      
+            'pwd\s*[:=]',           
+            'user(?:name)?\s*[:=]', 
+            'login\s*[:=]',         
+            'credentials\s*[:=]',   
+            'key\s*[:=]',           
+            'token\s*[:=]',         
+            'securestring\s*[:=]',  
+            'admin\s*[:=]',         
+            'root\s*[:=]',          
+            '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' 
+        )
+        
+
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
         foreach ($dir in $dirsToSearch) {
             $files = Get-ChildItem -Path $dir -Recurse -Include '*.txt', '*.docx', '*.ini', '*.md', '*.rtf', '*.csv', '*.xml', '*.one', '*.dcn', '*.env', '*.mailmap', '*.config', '*.yaml', '*.yml', '*.json', '*.properties', '*.plist', '*.sh', '*.ps1', '*.py', '*.rb', '*.js', '*.bash', '*.password', '*.key', '*.pem', '*.p12', '*.jks', '*.secret', '*.bak', '*.dump', '*.db', '*.sqlite' -ErrorAction SilentlyContinue |
             Where-Object { 
-                $_.FullName.ToLower() -notmatch 'node_modules|vendor|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pyenv|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale' 
+                $_.FullName.ToLower() -notmatch 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale' 
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
             
+            Write-Output "[*] Files to search: $($files.Count)"
             foreach ($file in $files) {
+                $firstMatchPrinted = $false  # Flag to limit output to one match per file
+    
                 try {
-                    $content = Get-Content $file.FullName -ErrorAction Stop | ForEach-Object { $_.ToLower() } | Out-Null
                     foreach ($pattern in $keywordPatterns) {
-                        if ($content -match [regex]::Escape($pattern.ToLower())) {
-                            Write-Output "[+] Grep creds match: $($file.FullName)"
+                        if (-not $firstMatchPrinted) {  # Check if we already printed a match for this file
+                            $findings = Select-String -Path $file.FullName -Pattern $pattern -SimpleMatch -ErrorAction Stop
+                            
+                            if ($findings) {
+                                $finding = $findings[0]  # Only take the first finding
+                                $line = $finding.Line
+                                $matchStart = $finding.Matches[0].Index
+                                $matchLength = $finding.Matches[0].Length
+    
+                                # Calculate the boundaries for the snippet
+                                $startPos = [Math]::Max(0, $matchStart - 50)  
+                                $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)  
+    
+                                # Extract the portion from the line
+                                $snippet = $line.Substring($startPos, $endPos - $startPos)
+    
+                                Write-Output "[+] Grep pattern '$pattern' match in file: $($file.FullName)"
+                                Write-Output "Line $($finding.LineNumber): $snippet"
+    
+                                $firstMatchPrinted = $true  # Prevent further matches in this file from being printed
+                            }
                         }
                     }
                 } catch {
                     if ($DEBUG_MODE) { Write-Output "Could not read file: $($file.FullName), Error: $_" }
                 }
             }
+            
         }
+        
     } catch {
         if ($DEBUG_MODE) { Write-Output "[-] Error while grepping for creds" }
     }    
