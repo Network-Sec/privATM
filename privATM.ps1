@@ -2138,7 +2138,7 @@ function checkCreds {
         $keywordPatterns = 'password\s*[:=]|pwd\s*[:=]|user(?:name)?\s*[:=]|login\s*[:=]|credentials\s*[:=]|key(?:_?\w+)?\s*[:=]|token(?:_?\w+)?\s*[:=]|securestring\s*[:=]|admin\s*[:=]|root\s*[:=]|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 
         
-        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
+        $dirsToSearch = @("$env:USERPROFILE")#, "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
         foreach ($dir in $dirsToSearch) {
             $files = Get-ChildItem -Path $dir -Recurse -Include '*.txt', '*.docx', '*.ini', '*.md', '*.rtf', '*.csv', '*.xml', '*.one', '*.dcn', '*.env', '*.mailmap', '*.config', '*.yaml', '*.yml', '*.json', '*.properties', '*.plist', '*.sh', '*.ps1', '*.py', '*.rb', '*.js', '*.bash', '*.password', '*.key', '*.pem', '*.p12', '*.jks', '*.secret', '*.bak', '*.dump', '*.db', '*.sqlite' -ErrorAction SilentlyContinue |
@@ -2149,39 +2149,43 @@ function checkCreds {
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
-            
-            Write-Output "[*] Files to search in $($dir)`: $($files.Count)"
+    
+            Write-Output "[*] Files to search: $($files.Count)"
             foreach ($file in $files) {
-                $firstMatchPrinted = $false 
-    
                 try {
-                    if (-not $firstMatchPrinted) {  
-                        $findings = Select-String -Path $file.FullName -Pattern $keywordPatterns -ErrorAction Stop
-                        
-                        foreach ($finding in $findings) {
-                            $line = $finding.Line
-                            $matchStart = $finding.Matches[0].Index
-                            $matchLength = $finding.Matches[0].Length
+                    $findings = Select-String -Path $file.FullName -Pattern $keywordPatterns -ErrorAction Stop
+                    $matchCount = $findings.Count
     
-                            $startPos = [Math]::Max(0, $matchStart - 50)  
-                            $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)  
+                    if ($matchCount -gt 0) {
+                        # Display the first match
+                        $firstFinding = $findings[0]
+                        $line = $firstFinding.Line
+                        $matchStart = $firstFinding.Matches[0].Index
+                        $matchLength = $firstFinding.Matches[0].Length
     
-                            $snippet = $line.Substring($startPos, $endPos - $startPos)
+                        $startPos = [Math]::Max(0, $matchStart - 50)  
+                        $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)  
     
-                            Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
+                        $snippet = $line.Substring($startPos, $endPos - $startPos)
+    
+                        Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
+                        Write-Output ""
+                        Write-Output "[+] File: $($file.FullName)"
+                        Write-Output "Line $($firstFinding.LineNumber): $snippet"
+                        Write-Output ""
+    
+                        # Show additional match count
+                        if ($matchCount -gt 1) {
+                            Write-Output "Additional matches in this file: $($matchCount - 1)"
                             Write-Output ""
-                            Write-Output "[+] File: $($file.FullName)"
-                            Write-Output "Line $($finding.LineNumber): $snippet"
-                            Write-Output ""
-                            $firstMatchPrinted = $true  
                         }
                     }
                 } catch {
                     if ($DEBUG_MODE) { Write-Output "Could not read file: $($file.FullName), Error: $_" }
                 }
             }
-            
         }
+        
         
     } catch {
         if ($DEBUG_MODE) { Write-Output "[-] Error while grepping for creds" }
