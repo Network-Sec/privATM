@@ -2123,6 +2123,9 @@ function checkCreds {
     # but we feel we're hitting hardware limits. Strongly depends on target system, a CTF machine
     # with hardly any user-created files could be scanned in seconds, including zips, a real system
     # could take hours without zips. We tried to find a balance in between.
+
+    # As it is set up right now, you could also remove the content regex scan entirely and 
+    # stick to the filetypes only.
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
 
