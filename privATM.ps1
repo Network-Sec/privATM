@@ -2165,7 +2165,7 @@ function checkCreds {
 
                                 $snippet = $line.Substring($startPos, $endPos - $startPos)
     
-                                Write-Output "[+] Grep pattern '$pattern' match in file: $($file.FullName)"
+                                Write-Output "[+] File: $($file.FullName)"
                                 Write-Output "Line $($finding.LineNumber): $snippet"
     
                                 $firstMatchPrinted = $true  
