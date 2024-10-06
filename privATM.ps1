@@ -2115,7 +2115,7 @@ function checkCreds {
             Write-Output "[-] Error while looking for RDP creds"
         }
     }
-    
+
     # Note: Adjust match and notmatch to your needs
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
@@ -2134,7 +2134,7 @@ function checkCreds {
             
             foreach ($file in $files) {
                 try {
-                    $content = Get-Content $file.FullName -ErrorAction Stop | ForEach-Object { $_.ToLower() }
+                    $content = Get-Content $file.FullName -ErrorAction Stop | ForEach-Object { $_.ToLower() } | Out-Null
                     foreach ($pattern in $keywordPatterns) {
                         if ($content -match [regex]::Escape($pattern.ToLower())) {
                             Write-Output "[+] Grep creds match: $($file.FullName)"
