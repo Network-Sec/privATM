@@ -2347,43 +2347,57 @@ function checkCreds {
             Write-Output "[*] Files to search: $($files.Count)"
             foreach ($file in $files) {
                 try {
-                    $findings = Select-String -Path $file.FullName -Pattern $regexPatterns.regex -ErrorAction Stop
-                    $matchCount = $findings.Count
-    
-                    if ($matchCount -gt 0) {
-                        $totalMatches += $matchCount
-                         # Add all findings to the global object
-                        $gCollect.Credentials += [PSCustomObject]@{
-                            FileName     = $file.FullName
-                            Matches      = $finding | Select-Object -First 25 | ForEach-Object { $_.Matches } # We limit this a bit for a reason
-                        }
-                        # Display the first match
-                        $firstFinding = $findings[0]
-                        $line = $firstFinding.Line
-                        $matchStart = $firstFinding.Matches[0].Index
-                        $matchLength = $firstFinding.Matches[0].Length
-    
-                        $startPos = [Math]::Max(0, $matchStart - 50)  
-                        $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)  
-    
-                        $snippet = $line.Substring($startPos, $endPos - $startPos)
-    
+                    $fileItem = Get-Item $file.FullName -ErrorAction SilentlyContinue
+                    $fileSizeMB = if ($null -eq $fileItem) { 0 } else { [math]::round($fileItem.Length / 1MB, 2) }
+                    
+                    if ($fileSizeMB -eq 0) { continue }
+
+                    if ($fileSizeMB -gt 2) {
                         Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                         Write-Output ""
                         Write-Output "[+] File: $($file.FullName)"
-                        Write-Output "Line $($firstFinding.LineNumber): $snippet"
+                        Write-Output "Filename / Extension match. Filesize: $fileSizeMB MB, skipping content scan."
                         Write-Output ""
-    
-                        # Show additional match count
-                        if ($matchCount -gt 1) {
-                            Write-Output "Additional matches in this file: $($matchCount - 1)"
+                    } else {
+                        $findings = Select-String -Path $file.FullName -Pattern $regexPatterns.regex -ErrorAction Stop
+                        $matchCount = $findings.Count
+            
+                        if ($matchCount -gt 0) {
+                            $totalMatches += $matchCount
+                            # Add all findings to the global object
+                            $gCollect.Credentials += [PSCustomObject]@{
+                                FileName = $file.FullName
+                                Matches  = $findings | Select-Object -First 25 | ForEach-Object { $_.Matches } # Limit this for a reason
+                            }
+                            # Display the first match
+                            $firstFinding = $findings[0]
+                            $line = $firstFinding.Line
+                            $matchStart = $firstFinding.Matches[0].Index
+                            $matchLength = $firstFinding.Matches[0].Length
+            
+                            $startPos = [Math]::Max(0, $matchStart - 50)
+                            $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)
+            
+                            $snippet = $line.Substring($startPos, $endPos - $startPos)
+            
+                            Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                             Write-Output ""
+                            Write-Output "[+] File: $($file.FullName)"
+                            Write-Output "Line $($firstFinding.LineNumber): $snippet"
+                            Write-Output ""
+            
+                            # Show additional match count
+                            if ($matchCount -gt 1) {
+                                Write-Output "Additional matches in this file: $($matchCount - 1)"
+                                Write-Output ""
+                            }
                         }
                     }
                 } catch {
                     if ($DEBUG_MODE) { Write-Output "Could not read file: $($file.FullName), Error: $_" }
                 }
             }
+            
         }
         
          # Prompt user in the console
