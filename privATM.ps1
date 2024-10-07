@@ -2373,36 +2373,53 @@ function checkCreds {
                         Write-Output "Filename / Extension match. Filesize: $fileSizeMB MB, skipping content scan."
                         Write-Output ""
                     } else {
-                        $findings = Get-Content -Path $file.FullName -ErrorAction Stop | Select-String -Pattern $regexPatterns.regex -ErrorAction Stop
+                        $fileContent = Get-Content -Path $file.FullName -ErrorAction Stop
+
+                        if ($fileContent.Length -le 0) { continue }
+                        $findings = @()
+                
+                        $regexPatterns.regex.ForEach({
+                            # Match on the file content
+                            $finding = $null 
+                            Write-Host $fileContent | Select-String -Pattern $_  -OutVariable $finding -Quiet
+                            
+                            # If we find matches, store them
+                            if ($finding.Count -gt 0) {
+                                $findings += $findings
+                            }
+                        })
+                
+                        # If we have any findings
                         $matchCount = $findings.Count
-            
                         if ($matchCount -gt 0) {
                             $totalMatches += $matchCount
-                            $firstCoupleMatches = $findings | Select-Object -First 25 | ForEach-Object { $_.Matches } 
-
+                
+                            # Select the first 25 matches
+                            $firstCoupleMatches = $findings | Select-Object -First 25 | ForEach-Object { $_ }
+                
                             # Add findings to the global object
                             $gCollect.Credentials += [PSCustomObject]@{
                                 FileName = $file.FullName
                                 Matches  = $firstCoupleMatches
                             }
-
-                            # Display the first match
+                
+                            # Display the first match (if necessary)
                             $firstFinding = $findings[0]
-                            $line = $firstFinding.Line
-                            $matchStart = $firstFinding.Matches[0].Index
-                            $matchLength = $firstFinding.Matches[0].Length
-            
+                            $line = $fileContent[$firstFinding.Index] # Adjusted to get the exact line
+                            $matchStart = $firstFinding.Index
+                            $matchLength = $firstFinding.Length
+                
                             $startPos = [Math]::Max(0, $matchStart - 50)
                             $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)
-            
+                
                             $snippet = $line.Substring($startPos, $endPos - $startPos)
-            
+                
                             Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                             Write-Output ""
                             Write-Output "[+] File: $($file.FullName)"
-                            Write-Output "Line $($firstFinding.LineNumber): $snippet"
+                            Write-Output "Line (First Finding): $snippet"
                             Write-Output ""
-            
+                
                             # Show additional match count
                             if ($matchCount -gt 1) {
                                 Write-Output "Additional matches in this file: $($matchCount - 1)"
