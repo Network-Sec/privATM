@@ -2126,7 +2126,7 @@ function checkCreds {
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files"
 
-        $dirsToSearch = @("$env:USERPROFILE")#, "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
+        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
 
         $regexPatterns = @(
             @{ type = 'contents'; regex = 'A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA[A-Z0-9]{16}'; name = 'AWS Access Key ID Value' },
@@ -2454,7 +2454,7 @@ function checkCreds {
                             Matches  = $firstCoupleMatches
                         }
 
-                        # Display the first match (if necessary)
+                        # Display the first match
                         $firstFinding = $findings[0]
                         $line = $firstFinding.Line
                         $matchStart = $firstFinding.Matches[0].Index
@@ -2474,7 +2474,7 @@ function checkCreds {
                                 break
                             }
                         }        
-                        Write-Output "Line (First Finding): $snippet"
+                        Write-Output "Line $($firstFinding.LineNumber)`: $snippet"
                         Write-Output ""
 
                         # Show additional match count
