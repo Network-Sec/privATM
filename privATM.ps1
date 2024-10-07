@@ -2136,8 +2136,8 @@ function checkCreds {
             @{ type = 'contents'; regex = 'aws_session_token\s{0,50}(:|=>|=)\s{0,50}[A-Za-z0-9/+=]{16,}'; name = 'AWS Session Token' },
             @{ type = 'contents'; regex = 'artifactory.{0,50}[0-9a-f]{112}'; name = 'Artifactory' },
             @{ type = 'contents'; regex = 'codeclima.{0,50}[0-9a-f]{64}'; name = 'CodeClimate' },
-            @{ type = 'contents'; regex = 'EAACEdEose0cBA[0-9A-Za-z]+'; name = 'Facebook access token' },
-            @{ type = 'contents'; regex = 'type\s{0,50}(:|=>|=)\s{0,50}service_account'; name = 'Google (GCM) Service account' },
+            @{ type = 'contents'; regex = 'EAACEdEose0cBA[0-9A-Za-z]+'; name = 'Facebook Access Token' },
+            @{ type = 'contents'; regex = 'type\s{0,50}(:|=>|=)\s{0,50}service_account'; name = 'Google (GCM) Service Account' },
             @{ type = 'contents'; regex = 'rk_[live|test]_[0-9a-zA-Z]{24}'; name = 'Stripe API key' },
             @{ type = 'contents'; regex = '[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com'; name = 'Google OAuth Key' },
             @{ type = 'contents'; regex = 'AIza[0-9A-Za-z\\-_]{35}'; name = 'Google Cloud API Key' },
@@ -2152,43 +2152,41 @@ function checkCreds {
             @{ type = 'contents'; regex = 'key-[0-9a-zA-Z]{32}'; name = 'MailGun API Key' },
             @{ type = 'contents'; regex = '[0-9a-f]{32}-us[0-9]{12}'; name = 'MailChimp API Key' },
             @{ type = 'contents'; regex = 'sshpass -p.*[''|``|"]'; name = 'SSH Password' },
-            @{ type = 'contents'; regex = 'https://outlook\.office\.com/webhook/[0-9a-f-]{36}\\@'; name = 'Outlook team' },
+            @{ type = 'contents'; regex = 'https://outlook\.office\.com/webhook/[0-9a-f-]{36}\\@'; name = 'Outlook Team URL' },
             @{ type = 'contents'; regex = 'sauce.{0,50}[0-9a-f]{36}'; name = 'Sauce Token' },
             @{ type = 'contents'; regex = 'xox[pboa]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32}'; name = 'Slack Token' },
             @{ type = 'contents'; regex = 'https://hooks.slack.com/services/T[a-zA-Z0-9_]{8}/B[a-zA-Z0-9_]{8}/[a-zA-Z0-9_]{24}'; name = 'Slack Webhook' },
             @{ type = 'contents'; regex = 'sonar.{0,50}[0-9a-f]{40}'; name = 'SonarQube Docs API Key' },
             @{ type = 'contents'; regex = 'hockey.{0,50}[0-9a-f]{32}'; name = 'HockeyApp' },
-            @{ type = 'contents'; regex = '[\w+]{1,24}://([^$<]+):([^$<]+)@[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,24}([^\s]+)'; name = 'Username and password in URI' },
+            @{ type = 'contents'; regex = '[\w+]{1,24}://([^$<]+):([^$<]+)@[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,24}([^\s]+)'; name = 'username and password in URL' },
             @{ type = 'contents'; regex = 'oy2[0-9]{43}'; name = 'NuGet API Key' },
             @{ type = 'contents'; regex = 'hawk\.[0-9A-Za-z\-_]{20}\.[0-9A-Za-z\-_]{20}'; name = 'StackHawk API Key' },
             @{ type = 'contents'; regex = '-----BEGIN (EC|RSA|DSA|OPENSSH|PGP) PRIVATE KEY'; name = 'Private Key' },
             @{ type = 'contents'; regex = 'define(.{0,20})?(DB_CHARSET|NONCE_SALT|LOGGED_IN_SALT|AUTH_SALT|NONCE_KEY|DB_HOST|DB_PASSWORD|AUTH_KEY|SECURE_AUTH_KEY|LOGGED_IN_KEY|DB_NAME|DB_USER)(.{0,20})?[''"]{10,120}[''"]'; name = 'WP-Config' },
-            @{ type = 'contents'; regex = 'aws_access_key_id.{0,20}=.[0-9a-zA-Z\/+]{20,40}'; name = 'AWS cred file' },
+            @{ type = 'contents'; regex = 'aws_access_key_id.{0,20}=.[0-9a-zA-Z\/+]{20,40}'; name = 'AWS Credential File' },
             @{ type = 'contents'; regex = 'facebook.{0,20}[0-9a-f]{32}'; name = 'Facebook Secret Key' },
             @{ type = 'contents'; regex = 'facebook.{0,20}EAACEdEose0cBA'; name = 'Facebook Access Token' },
             @{ type = 'contents'; regex = 'facebook.{0,20}[0-9a-zA-Z]{10,60}'; name = 'Facebook API key' },
             @{ type = 'contents'; regex = 'twitter.{0,20}[A-Za-z0-9_]{15,50}'; name = 'Twitter Access Token' },
             @{ type = 'contents'; regex = 'mYCLp[0-9]{4}-[A-Z]{2}'; name = 'Acquia Token' }
-            @{ type = 'contents'; regex = 'user(?:name)?\s*[:=]\s*[''|``|"]'; name = 'user or username' },
+            @{ type = 'contents'; regex = 'user(?:name)?\s*[:=]\s*[''|``|"]'; name = 'username' },
             @{ type = 'contents'; regex = 'password?\s*[:=]\s*[''|``|"]'; name = 'password' },
             @{ type = 'contents'; regex = 'pwd?\s*[:=]\s*[''|``|"]'; name = 'password' },
             @{ type = 'contents'; regex = '(?=.*\buser(?:name)?\b)(?=.*\bpassword\b)'; name = 'username and password nearby' },
             @{ type = 'contents'; regex = '(?=.*\buser(?:name)?\b)(?=.*\bpwd\b)'; name = 'username and password (pwd) nearby' },
             @{ type = 'contents'; regex = '(?=.*\blogin\b)(?=.*\bcredentials\b)'; name = 'login and credentials nearby' },
-            @{ type = 'contents'; regex = 'key(?:_?\w+)?\s*[:=]'; name = 'keys' },
-            @{ type = 'contents'; regex = 'token(?:_?\w+)?\s*[:=]'; name = 'tokens' },
-            @{ type = 'contents'; regex = 'securestring\s*[:=]'; name = 'securestrings' },
+            @{ type = 'contents'; regex = 'key(?:_?\w+)?\s*[:=]'; name = 'Key' },
+            @{ type = 'contents'; regex = 'token(?:_?\w+)?\s*[:=]'; name = 'Token' },
+            @{ type = 'contents'; regex = 'securestring\s*[:=]'; name = 'securestring' },
             @{ type = 'contents'; regex = 'admin\s*[:=]'; name = 'admin' },
             @{ type = 'contents'; regex = 'root\s*[:=]'; name = 'root' },
-            @{ type = 'contents'; regex = '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'; name = 'email address' },
-            @{ type = 'contents'; regex = 'access_token\s*[:=]'; name = 'access tokens' },
-            @{ type = 'contents'; regex = 'api_key\s*[:=]'; name = 'API keys' },
-            @{ type = 'contents'; regex = 'session_id\s*[:=]'; name = 'session IDs' },
-            @{ type = 'contents'; regex = 'ssh\s+\S+@\S+'; name = 'SSH logins' },
-            @{ type = 'contents'; regex = '-----BEGIN (PRIVATE|RSA) KEY-----'; name = 'private key' }
+            @{ type = 'contents'; regex = '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'; name = 'Email Address' },
+            @{ type = 'contents'; regex = 'access_token\s*[:=]'; name = 'Access Token' },
+            @{ type = 'contents'; regex = 'api_key\s*[:=]'; name = 'API Key' },
+            @{ type = 'contents'; regex = 'session_id\s*[:=]'; name = 'Session ID' },
+            @{ type = 'contents'; regex = 'ssh\s+\S+@\S+'; name = 'SSH login' },
+            @{ type = 'contents'; regex = '-----BEGIN (PRIVATE|RSA) KEY-----'; name = 'RSA Private Key' }
         )
-
-        $regexPattern = $($regexPatterns.regex -join '|')
 
         $signatures = @(
             @{ type = 'extension'; match = '*.php'; name = 'PHP file' },
@@ -2334,7 +2332,6 @@ function checkCreds {
 
         # Combine the filename and extension matches, convert GLOB to Regex, make single expression
         $includeListRegex = @($sigFilenames + $sigExtensions) -replace '\.', '\.' -replace '\*', '.*' -join '|'
-        # This may look confusing, but -replace itself is a regex search, so we need to escape searchterm
         $excludeExtensionsRegex = $excludeExtensions -replace '\.', '\.' -replace '\*', '.*' -join '|'
 
         # Combine into literal list (remove GLOB)
@@ -2354,14 +2351,15 @@ function checkCreds {
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             
             # Collect files for current directory
-            $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -ErrorAction SilentlyContinue |
+            $files = Get-ChildItem -Path "$dir\*" -Recurse -Attributes $includeAttribs -ErrorAction SilentlyContinue |
             Where-Object { 
                 $_.FullName.ToLower() -notmatch $excludeFilesOrDirs -and
-                $_.Name.ToLower() -notmatch $excludeExtensionsRegex
+                $_.Extension.ToLower() -notmatch $excludeExtensionsRegex
             } | 
             Where-Object { 
                 $_.Name.ToLower() -match $includeListRegex -or
-                $_.Name.ToLower() -in  $includeListLiteral
+                $_.Name.ToLower() -in  $includeListLiteral -or
+                $_.Extension.ToLower() -match $includeListRegex 
             } |
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
@@ -2373,7 +2371,9 @@ function checkCreds {
 
             # Output number of files found in the directory
             $totalFilesInDir = $files.Count
-            Write-Output "[*] Matching files in $dir`: $totalFilesInDir"
+            if ($totalFilesInDir -gt 0) {
+                Write-Output "[*] Matching files in $dir`: $totalFilesInDir"
+            }
         }
 
         Write-Output "[*] Total files to search: $($allFiles.Count)"
