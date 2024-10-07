@@ -2315,7 +2315,9 @@ function checkCreds {
             @{ type = 'filename'; match = '.ftpconfig'; name = 'Created by sftp-deployment for Atom, contains server details and credentials' }
         )
 
-        $excludeList  = @('*.exe', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.tiff', '*.tif', '*.psd', '*.xcf', '*.zip', '*.tar.gz', '*.ttf', '*.lock')
+        $excludeFilesOrDirs = 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale' 
+
+        $excludeExtensions  = @('*.exe', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.tiff', '*.tif', '*.psd', '*.xcf', '*.zip', '*.tar.gz', '*.ttf', '*.lock')
 
         # Build the -Include string dynamically from the $signatures array
         $sigFilenames = $signatures | Where-Object { $_.type -eq 'filename' } | ForEach-Object { $_.match }
@@ -2326,111 +2328,127 @@ function checkCreds {
 
         $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
     
+        $includeAttribs = 'Directory,Hidden,Normal,NotContentIndexed,ReadOnly,System,Temporary'
+
         $totalMatches = 0
+        $allFiles = @() 
+
+        $dirCount = $dirsToSearch.Count
+        $dirIndex = 0
+        Write-Output "[*] Starting file discovery..."
+
         foreach ($dir in $dirsToSearch) {
-            $files = Get-ChildItem -Path "$dir\*" -Attributes Directory,Hidden,Normal,NotContentIndexed,ReadOnly,System,Temporary  -Recurse -Include $includeList -Exclude $excludeList -ErrorAction SilentlyContinue |
+            $dirIndex++
+            Write-Progress -Activity "Building File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
+            
+            # Collect files for current directory
+            $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -Recurse -Include $includeList -Exclude $excludeExtensions -ErrorAction SilentlyContinue |
             Where-Object { 
-                $_.FullName.ToLower() -notmatch 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale' 
+                $_.FullName.ToLower() -notmatch $excludeFilesOrDirs
             } | 
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
-            
-            $totalFiles = $files.Count
-            Write-Output "[*] Files to search: $($totalFiles)"
-            $currentFileIndex = 0
-            foreach ($file in $files) {
-                $currentFileIndex++
-                $fileSizeMB = 0
-                try {
-                    $fileItem = Get-Item $file.FullName -ErrorAction SilentlyContinue
-                    $fileSizeMB = if ($null -eq $fileItem) { 0 } else { [math]::round($fileItem.Length / 1MB, 2) }
-                }
-                catch {
-                    if ($DEBUG_MODE) { 
-                        Write-Output "[!] Error getting file size for: $($file.FullName)" 
-                    }
-                }
 
-                if ($fileSizeMB -eq 0) { continue }
+            # Add files to global list
+            $allFiles += $files
 
-                # Show progress
-                Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFiles - $file - $fileSizeMB MB" -PercentComplete (($currentFileIndex / $totalFiles) * 100)
-            
-                try {
-                    if ($fileSizeMB -gt 2) {
+            # Output number of files found in the directory
+            $totalFilesInDir = $files.Count
+            Write-Output "[*] Number of accessible files matching our patterns found in $dir`: $totalFilesInDir"
+        }
+
+        Write-Output "[*] Total files to search: $($allFiles.Count)"
+        Write-Progress -Activity "Building File List" -Status "Completed" -Completed
+
+        # Stage 2: Process all files
+        $totalFiles = $allFiles.Count
+        $currentFileIndex = 0
+
+        foreach ($file in $allFiles) {
+            $currentFileIndex++
+            $fileSizeMB = 0
+            try {
+                $fileItem = Get-Item $file.FullName -ErrorAction SilentlyContinue
+                $fileSizeMB = if ($null -eq $fileItem) { 0 } else { [math]::round($fileItem.Length / 1MB, 2) }
+            }
+            catch {
+                if ($DEBUG_MODE) { 
+                    Write-Output "[!] Error getting file size for: $($file.FullName)" 
+                }
+            }
+
+            if ($fileSizeMB -eq 0) { continue }
+
+            # Show progress for file processing
+            Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFiles - $file - $fileSizeMB MB" -PercentComplete (($currentFileIndex / $totalFiles) * 100)
+
+            try {
+                if ($fileSizeMB -gt 10) {
+                    Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
+                    Write-Output ""
+                    Write-Output "[+] File: $($file.FullName)"
+                    Write-Output "Filename / Extension match. Filesize: $fileSizeMB MB, skipping content scan."
+                    Write-Output ""
+                } else {
+                    $fileContent = Get-Content -Path $file.FullName -ErrorAction Stop
+
+                    if ($fileContent.Length -le 0) { continue }
+                    $findings = @()
+                    $fileContent | Select-String -Pattern $regexPatterns.regex -OutVariable $findings -Quiet > $null
+
+                    # If we have any findings
+                    $matchCount = $findings.Count
+                    if ($matchCount -gt 0) {
+                        $totalMatches += $matchCount
+
+                        # Select the first 25 matches
+                        $firstCoupleMatches = $findings | Select-Object -First 25 | ForEach-Object { $_ }
+
+                        # Add findings to the global object
+                        $gCollect.Credentials += [PSCustomObject]@{
+                            FileName = $file.FullName
+                            Matches  = $firstCoupleMatches
+                        }
+
+                        # Display the first match (if necessary)
+                        $firstFinding = $findings[0]
+                        $line = $fileContent[$firstFinding.Index] # Adjusted to get the exact line
+                        $matchStart = $firstFinding.Index
+                        $matchLength = $firstFinding.Length
+
+                        $startPos = [Math]::Max(0, $matchStart - 50)
+                        $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)
+
+                        $snippet = $line.Substring($startPos, $endPos - $startPos)
+
                         Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                         Write-Output ""
                         Write-Output "[+] File: $($file.FullName)"
-                        Write-Output "Filename / Extension match. Filesize: $fileSizeMB MB, skipping content scan."
+                        Write-Output "Line (First Finding): $snippet"
                         Write-Output ""
-                    } else {
-                        $fileContent = Get-Content -Path $file.FullName -ErrorAction Stop
 
-                        if ($fileContent.Length -le 0) { continue }
-                        $findings = @()
-                
-                        $regexPatterns.regex.ForEach({
-                            $finding = $null 
-                            $null = Write-Output $fileContent | Select-String -Pattern $_  -OutVariable $finding -Quiet | Out-Null
-                            
-                            # If we find matches, store them
-                            if ($finding.Count -gt 0) {
-                                $findings += $findings
-                            }
-                        })
-                
-                        # If we have any findings
-                        $matchCount = $findings.Count
-                        if ($matchCount -gt 0) {
-                            $totalMatches += $matchCount
-                
-                            # Select the first 25 matches
-                            $firstCoupleMatches = $findings | Select-Object -First 25 | ForEach-Object { $_ }
-                
-                            # Add findings to the global object
-                            $gCollect.Credentials += [PSCustomObject]@{
-                                FileName = $file.FullName
-                                Matches  = $firstCoupleMatches
-                            }
-                
-                            # Display the first match (if necessary)
-                            $firstFinding = $findings[0]
-                            $line = $fileContent[$firstFinding.Index] # Adjusted to get the exact line
-                            $matchStart = $firstFinding.Index
-                            $matchLength = $firstFinding.Length
-                
-                            $startPos = [Math]::Max(0, $matchStart - 50)
-                            $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)
-                
-                            $snippet = $line.Substring($startPos, $endPos - $startPos)
-                
-                            Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
+                        # Show additional match count
+                        if ($matchCount -gt 1) {
+                            Write-Output "Additional matches in this file: $($matchCount - 1)"
                             Write-Output ""
-                            Write-Output "[+] File: $($file.FullName)"
-                            Write-Output "Line (First Finding): $snippet"
-                            Write-Output ""
-                
-                            # Show additional match count
-                            if ($matchCount -gt 1) {
-                                Write-Output "Additional matches in this file: $($matchCount - 1)"
-                                Write-Output ""
-                            }
                         }
                     }
-                } catch {
-                    if ($DEBUG_MODE) { Write-Output "Could not read file: $($file.FullName), Error: $_" }
                 }
+            } catch {
+                if ($DEBUG_MODE) { Write-Output "Could not read file: $($file.FullName), Error: $_" }
             }
-            Write-Progress -Activity "Processing Files" -Status "Completed" -Completed
         }
-        
-         # Prompt user in the console
+
+        Write-Progress -Activity "Processing Files" -Status "Completed" -Completed
+
+        # Prompt user in the console
         $userResponse = Read-Host "[?] If you're in a desktop session, should we display all findings in a new Desktop-Window (y/n)?"
         if (($userResponse -eq 'y') -and ($totalMatches -gt 0)) {
             $gCollect.Credentials | Out-GridView -Title "Credential Findings"
         }
+
     } catch {
         if ($DEBUG_MODE) { Write-Output "[-] Error while grepping for creds" }
     }    
