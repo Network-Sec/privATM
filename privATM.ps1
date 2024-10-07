@@ -2187,7 +2187,9 @@ function checkCreds {
             @{ type = 'contents'; regex = 'ssh\s+\S+@\S+'; name = 'SSH logins' },
             @{ type = 'contents'; regex = '-----BEGIN (PRIVATE|RSA) KEY-----'; name = 'private key identifiers' }
         )
-        
+
+        $regexPattern = $($regexPatterns.regex -join '|')
+
         $signatures = @(
             @{ type = 'extension'; match = '*.php'; name = 'PHP file' },
             @{ type = 'extension'; match = '*.txt'; name = 'Text file' },
@@ -2376,10 +2378,11 @@ function checkCreds {
 
         Write-Output "[*] Total files to search: $($allFiles.Count)"
         Write-Progress -Activity "Building File List" -Status "Completed" -Completed
-
-        # Stage 2: Process all files
         $totalFileCount = $allFiles.Count
         $currentFileIndex = 0
+
+        # Avoid regex match hanging / crashing on infinitely long lines
+        $maxLineLength = 400
 
         if ($DEBUG_MODE) { Write-Output "allFiles: $allFiles" }
 
@@ -2413,7 +2416,23 @@ function checkCreds {
                     $fileContent = Get-Content -Path $file.FullName -ErrorAction SilentlyContinue
 
                     if ($fileContent.Length -le 0) { continue }
-                    $findings = $fileContent | Select-String -Pattern $regexPatterns.regex
+                    
+                    $findings = @()                    
+                    foreach ($ln in $fileContent -split '\n') {
+                        if ($ln.Length -gt $maxLineLength) {
+                            # Split the long line into smaller chunks of maxLineLength
+                            $chunks = [regex]::Matches($ln, '.{1,' + $maxLineLength + '}') | ForEach-Object { $_.Value }
+                            
+                            # Check each chunk for matches
+                            foreach ($chunk in $chunks) {
+                                $findings += $chunk | Select-String -Pattern $regexPattern
+                            }
+                        } else {
+                            $findings += $ln | Select-String -Pattern $regexPattern
+                        }
+                    }
+                    
+                     
 
                     # If we have any findings
                     $matchCount = $findings.Count
