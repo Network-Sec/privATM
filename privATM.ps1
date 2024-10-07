@@ -2335,7 +2335,7 @@ function checkCreds {
 
         $dirCount = $dirsToSearch.Count
         $dirIndex = 0
-        Write-Output "[*] Starting file discovery, this will take a while..."
+        Write-Output "[*] Starting file discovery recursively, this will take a while..."
 
         foreach ($dir in $dirsToSearch) {
             $dirIndex++
