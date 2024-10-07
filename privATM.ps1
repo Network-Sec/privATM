@@ -2420,19 +2420,17 @@ function checkCreds {
                     $findings = @()                    
                     foreach ($ln in $fileContent -split '\n') {
                         if ($ln.Length -gt $maxLineLength) {
-                            # Split the long line into smaller chunks of maxLineLength
+                            # Split very long lines into smaller chunks of maxLineLength
                             $chunks = [regex]::Matches($ln, '.{1,' + $maxLineLength + '}') | ForEach-Object { $_.Value }
                             
                             # Check each chunk for matches
                             foreach ($chunk in $chunks) {
-                                $findings += $chunk | Select-String -Pattern $regexPattern
+                                $findings += $chunk | Select-String -Pattern $regexPatterns.regex
                             }
                         } else {
-                            $findings += $ln | Select-String -Pattern $regexPattern
+                            $findings += $ln | Select-String -Pattern $regexPatterns.regex
                         }
-                    }
-                    
-                     
+                    }               
 
                     # If we have any findings
                     $matchCount = $findings.Count
@@ -2449,9 +2447,11 @@ function checkCreds {
                         }
 
                         # Add findings to the global object
-                        $gCollect.Credentials += [PSCustomObject]@{
-                            FileName = $file.FullName
-                            Matches  = $firstCoupleMatches
+                        foreach ($mt in $firstCoupleMatches) {
+                            $gCollect.Credentials += [PSCustomObject]@{
+                                FileName = $file.FullName
+                                Matches  = $mt
+                            }
                         }
 
                         # Display the first match
@@ -2467,13 +2467,16 @@ function checkCreds {
 
                         Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                         Write-Output ""
-                        Write-Output "[+] File: $($file.FullName)"
+                       
+                        $patType = ""
                         foreach ($pattern in $regexPatterns) {
                             if ($firstFinding.Pattern -eq $pattern.regex) {
-                                Write-Output "Match Type: $($pattern.name)"
+                                $patType = "`[$($pattern.name)`]"
                                 break
                             }
                         }        
+
+                        Write-Output "[+] $patType File: $($file.FullName)"
                         Write-Output "Line $($firstFinding.LineNumber)`: $snippet"
                         Write-Output ""
 
