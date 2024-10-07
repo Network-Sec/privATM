@@ -2126,7 +2126,7 @@ function checkCreds {
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files"
 
-        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
+        $dirsToSearch = @("$env:USERPROFILE")#, "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
 
         $regexPatterns = @(
             @{ type = 'contents'; regex = 'A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA[A-Z0-9]{16}'; name = 'AWS Access Key ID Value' },
@@ -2338,7 +2338,7 @@ function checkCreds {
         # Combine into literal list (remove GLOB)
         $includeListLiteral = @($sigFilenames + $sigExtensions).ForEach({ $_ -replace '\*', '' })
 
-        $includeAttribs = 'Directory,Hidden,Normal,NotContentIndexed,ReadOnly,System,Temporary'
+        $includeAttribs = 'Archive,Directory,Hidden,Normal,NotContentIndexed,ReadOnly,System,Temporary'
 
         $totalMatches = 0
         $allFiles = @() 
@@ -2352,7 +2352,7 @@ function checkCreds {
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             
             # Collect files for current directory
-            $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -Recurse -ErrorAction SilentlyContinue |
+            $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -ErrorAction SilentlyContinue |
             Where-Object { 
                 $_.FullName.ToLower() -notmatch $excludeFilesOrDirs -and
                 $_.Name.ToLower() -notmatch $excludeExtensionsRegex
@@ -2378,15 +2378,17 @@ function checkCreds {
         Write-Progress -Activity "Building File List" -Status "Completed" -Completed
 
         # Stage 2: Process all files
-        $totalFiles = $allFiles.Count
+        $totalFileCount = $allFiles.Count
         $currentFileIndex = 0
+
+        if ($DEBUG_MODE) { Write-Output "allFiles: $allFiles" }
 
         foreach ($file in $allFiles) {
             $currentFileIndex++
             $fileSizeMB = 0
             try {
                 $fileItem = Get-Item $file.FullName -ErrorAction SilentlyContinue
-                $fileSizeMB = if ($null -eq $fileItem) { 0 } else { [math]::round($fileItem.Length / 1MB, 2) }
+                $fileSizeMB = if ($null -eq $fileItem) { 0 } else { [math]::ceiling($fileItem.Length / 1MB) }
             }
             catch {
                 if ($DEBUG_MODE) { 
@@ -2397,9 +2399,10 @@ function checkCreds {
             if ($fileSizeMB -eq 0) { continue }
 
             # Show progress for file processing
-            Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFiles - $file - $fileSizeMB MB" -PercentComplete (($currentFileIndex / $totalFiles) * 100)
+            Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFileCount - $file - $fileSizeMB MB" -PercentComplete (($currentFileIndex / $totalFileCount) * 100)
 
             try {
+                if ($DEBUG_MODE) { Write-Output "$($file.FullName) | $fileSizeMB"}
                 if ($fileSizeMB -gt 40) {
                     Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                     Write-Output ""
@@ -2407,18 +2410,24 @@ function checkCreds {
                     Write-Output "Filename / Extension match. Filesize: $fileSizeMB MB, skipping content scan."
                     Write-Output ""
                 } else {
-                    $fileContent = Get-Content -Path $file.FullName -ErrorAction Stop
+                    $fileContent = Get-Content -Path $file.FullName -ErrorAction SilentlyContinue
 
                     if ($fileContent.Length -le 0) { continue }
-                    $findings = $fileContent | Select-String -Pattern $regexPatterns.regex -Quiet > $null
+                    $findings = $fileContent | Select-String -Pattern $regexPatterns.regex
 
                     # If we have any findings
                     $matchCount = $findings.Count
+
                     if ($matchCount -gt 0) {
                         $totalMatches++
 
                         # Select the first 25 matches
-                        $firstCoupleMatches = $findings | Select-Object -First 25 | ForEach-Object { $_ }
+                        if ($matchCount -gt 25) {
+                            $firstCoupleMatches = $findings | Select-Object -First 25 | ForEach-Object { $_ }
+                        } 
+                        else {
+                            $firstCoupleMatches = $findings
+                        }
 
                         # Add findings to the global object
                         $gCollect.Credentials += [PSCustomObject]@{
@@ -2428,9 +2437,9 @@ function checkCreds {
 
                         # Display the first match (if necessary)
                         $firstFinding = $findings[0]
-                        $line = $fileContent[$firstFinding.Index] # Adjusted to get the exact line
-                        $matchStart = $firstFinding.Index
-                        $matchLength = $firstFinding.Length
+                        $line = $firstFinding.Line
+                        $matchStart = $firstFinding.Matches[0].Index
+                        $matchLength = $firstFinding.Matches[0].Length
 
                         $startPos = [Math]::Max(0, $matchStart - 50)
                         $endPos = [Math]::Min($line.Length, $matchStart + $matchLength + 50)
