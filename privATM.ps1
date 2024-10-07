@@ -2118,14 +2118,7 @@ function checkCreds {
     }
 
     # Note: Adjust patterns, include and exclude as needed. We currently experiment with more
-    # complex patterns, it's a fine line between 100k false-positives and missing the juicy ones
-    # Linux grep and especially zgrep are way faster and more powerfull, including archives makes sense
-    # but we feel we're hitting hardware limits. Strongly depends on target system, a CTF machine
-    # with hardly any user-created files could be scanned in seconds, including zips, a real system
-    # could take hours without zips. We tried to find a balance in between.
-
-    # As it is set up right now, you could also remove the content regex scan entirely and 
-    # stick to the filetypes only.
+    # complex patterns, results are way better but performance tanked completely. Still working on it
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
 
@@ -2379,9 +2372,8 @@ function checkCreds {
                         $findings = @()
                 
                         $regexPatterns.regex.ForEach({
-                            # Match on the file content
                             $finding = $null 
-                            Write-Host $fileContent | Select-String -Pattern $_  -OutVariable $finding -Quiet
+                            $null = Write-Output $fileContent | Select-String -Pattern $_  -OutVariable $finding -Quiet | Out-Null
                             
                             # If we find matches, store them
                             if ($finding.Count -gt 0) {
