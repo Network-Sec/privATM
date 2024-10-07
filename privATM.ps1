@@ -2373,7 +2373,7 @@ function checkCreds {
 
             # Output number of files found in the directory
             $totalFilesInDir = $files.Count
-            Write-Output "[*] Number of accessible files matching our patterns found in $dir`: $totalFilesInDir"
+            Write-Output "[*] Matching files in $dir`: $totalFilesInDir"
         }
 
         Write-Output "[*] Total files to search: $($allFiles.Count)"
