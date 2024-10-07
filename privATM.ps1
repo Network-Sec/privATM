@@ -2070,6 +2070,7 @@ function checkCreds {
         "$env:APPDATA\Pale Moon\Profiles\*.default\logins.json"
     )
     
+    $totalBrowserMatches = 0
     foreach ($dbPattern in $databases) {
         try {
             $dbPaths = Get-ChildItem -Path "$dbPattern" -ErrorAction SilentlyContinue
@@ -2077,14 +2078,15 @@ function checkCreds {
         catch {
             if ($DEBUG_MODE) {  Write-Output "[-] Error while looking for Stored Credentials: $_" }
         }
-    
+
         foreach ($dbPath in $dbPaths) {
             try {
                 $path = $dbPath.FullName
                 if (((Get-Acl "$path").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or ((Get-Acl "$path").Owner -match "$env:USERDOMAIN\\$env:USERNAME")) {
                     $content = Get-Content -Path $dbPath.FullName -ErrorAction Stop -Raw
                     if ($content -match "username|password") {
-                        Write-Output "[+] Grep Browser creds match, file is accessible! $($dbPath.FullName)"
+                        $totalBrowserMatches++
+                        Write-Output "[+] Browser Creds match, file is accessible: $($dbPath.FullName)"
                     }
                 }
             }
@@ -2092,9 +2094,11 @@ function checkCreds {
                 if ($DEBUG_MODE) {  Write-Output "[-] Error while looking for Stored Credentials: $_" }
             }
         }
-
+       
     }
-    
+
+    if ($totalBrowserMatches) { Write-Output "" }
+
     # This is working, but atm disabled, cause we had strange crashes several times, maybe coincidental?
     if ($false) {
         try {
@@ -2120,7 +2124,9 @@ function checkCreds {
     # Note: Adjust patterns, include and exclude as needed. We currently experiment with more
     # complex patterns...
     try {
-        Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
+        Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files"
+
+        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
 
         $regexPatterns = @(
             @{ type = 'contents'; regex = 'A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA[A-Z0-9]{16}'; name = 'AWS Access Key ID Value' },
@@ -2183,6 +2189,7 @@ function checkCreds {
         )
         
         $signatures = @(
+            @{ type = 'extension'; match = '*.php'; name = 'PHP file' },
             @{ type = 'extension'; match = '*.txt'; name = 'Text file' },
             @{ type = 'extension'; match = '*.docx'; name = 'Word Document' },
             @{ type = 'extension'; match = '*.ini'; name = 'INI File' },
@@ -2323,11 +2330,14 @@ function checkCreds {
         $sigFilenames = $signatures | Where-Object { $_.type -eq 'filename' } | ForEach-Object { $_.match }
         $sigExtensions = $signatures | Where-Object { $_.type -eq 'extension' } | ForEach-Object { $_.match }
 
-        # Combine the filename and extension matches into a single -Include and -Exclude array
-        $includeList = @($sigFilenames + $sigExtensions)
+        # Combine the filename and extension matches, convert GLOB to Regex, make single expression
+        $includeListRegex = @($sigFilenames + $sigExtensions) -replace '\.', '\.' -replace '\*', '.*' -join '|'
+        # This may look confusing, but -replace itself is a regex search, so we need to escape searchterm
+        $excludeExtensionsRegex = $excludeExtensions -replace '\.', '\.' -replace '\*', '.*' -join '|'
 
-        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive", "$env:Path")
-    
+        # Combine into literal list (remove GLOB)
+        $includeListLiteral = @($sigFilenames + $sigExtensions).ForEach({ $_ -replace '\*', '' })
+
         $includeAttribs = 'Directory,Hidden,Normal,NotContentIndexed,ReadOnly,System,Temporary'
 
         $totalMatches = 0
@@ -2339,13 +2349,18 @@ function checkCreds {
 
         foreach ($dir in $dirsToSearch) {
             $dirIndex++
-            Write-Progress -Activity "Building File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
+            Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             
             # Collect files for current directory
-            $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -Recurse -Include $includeList -Exclude $excludeExtensions -ErrorAction SilentlyContinue |
+            $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -Recurse -ErrorAction SilentlyContinue |
             Where-Object { 
-                $_.FullName.ToLower() -notmatch $excludeFilesOrDirs
+                $_.FullName.ToLower() -notmatch $excludeFilesOrDirs -and
+                $_.Name.ToLower() -notmatch $excludeExtensionsRegex
             } | 
+            Where-Object { 
+                $_.Name.ToLower() -match $includeListRegex -or
+                $_.Name.ToLower() -in  $includeListLiteral
+            } |
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
@@ -2385,7 +2400,7 @@ function checkCreds {
             Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFiles - $file - $fileSizeMB MB" -PercentComplete (($currentFileIndex / $totalFiles) * 100)
 
             try {
-                if ($fileSizeMB -gt 10) {
+                if ($fileSizeMB -gt 40) {
                     Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                     Write-Output ""
                     Write-Output "[+] File: $($file.FullName)"
@@ -2395,13 +2410,12 @@ function checkCreds {
                     $fileContent = Get-Content -Path $file.FullName -ErrorAction Stop
 
                     if ($fileContent.Length -le 0) { continue }
-                    $findings = @()
-                    $fileContent | Select-String -Pattern $regexPatterns.regex -OutVariable $findings -Quiet > $null
+                    $findings = $fileContent | Select-String -Pattern $regexPatterns.regex -Quiet > $null
 
                     # If we have any findings
                     $matchCount = $findings.Count
                     if ($matchCount -gt 0) {
-                        $totalMatches += $matchCount
+                        $totalMatches++
 
                         # Select the first 25 matches
                         $firstCoupleMatches = $findings | Select-Object -First 25 | ForEach-Object { $_ }
@@ -2426,6 +2440,12 @@ function checkCreds {
                         Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                         Write-Output ""
                         Write-Output "[+] File: $($file.FullName)"
+                        foreach ($pattern in $regexPatterns) {
+                            if ($firstFinding.Pattern -eq $pattern.regex) {
+                                Write-Output "Match Type: $($pattern.name)"
+                                break
+                            }
+                        }        
                         Write-Output "Line (First Finding): $snippet"
                         Write-Output ""
 
@@ -2443,12 +2463,15 @@ function checkCreds {
 
         Write-Progress -Activity "Processing Files" -Status "Completed" -Completed
 
-        # Prompt user in the console
-        $userResponse = Read-Host "[?] If you're in a desktop session, should we display all findings in a new Desktop-Window (y/n)?"
-        if (($userResponse -eq 'y') -and ($totalMatches -gt 0)) {
-            $gCollect.Credentials | Out-GridView -Title "Credential Findings"
+        if ($totalMatches -gt 0) {
+            Write-Output "[+] Total Matches: $totalMatches"
+            Write-Output ""
+            $userResponse = Read-Host "[?] If you're in a desktop session, should we display all findings in a new Desktop-Window (y/n)?"
+            if ($userResponse -eq 'y') {
+                $gCollect.Credentials | Out-GridView -Title "Credential Findings"
+            }
+            Write-Output ""
         }
-
     } catch {
         if ($DEBUG_MODE) { Write-Output "[-] Error while grepping for creds" }
     }    
