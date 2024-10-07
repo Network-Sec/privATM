@@ -2118,7 +2118,7 @@ function checkCreds {
     }
 
     # Note: Adjust patterns, include and exclude as needed. We currently experiment with more
-    # complex patterns, results are way better but performance tanked completely. Still working on it
+    # complex patterns...
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files, may take a while..."
 
@@ -2335,7 +2335,7 @@ function checkCreds {
 
         $dirCount = $dirsToSearch.Count
         $dirIndex = 0
-        Write-Output "[*] Starting file discovery..."
+        Write-Output "[*] Starting file discovery, this will take a while..."
 
         foreach ($dir in $dirsToSearch) {
             $dirIndex++
