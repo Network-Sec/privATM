@@ -2347,17 +2347,38 @@ function checkCreds {
         Write-Output "[*] Starting directory & file discovery recursively, this will take a while..."
         $dirIndex = 0
         $dirCount = $dirsToSearch.Count
-        foreach ($dir in $($dirsToSearch | Select-Object -Unique)) {
+        $allDirs = @()
+        $recursiveDirs = @()
+
+        foreach ($dir in $dirsToSearch) {
             $dirIndex++
             Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
-            $recursiveDirs += Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
-            Where-Object { $_.FullName -notmatch $excludeFilesOrDirs }
-        }
 
+            # Check if directory has already been processed
+            if ($allDirs -notcontains $dir) {
+                $allDirs += $dir
+
+                # Get child directories recursively and ensure no duplicates
+                $subDirs = Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction SilentlyContinue | 
+                Where-Object { 
+                    $_.FullName -notmatch $excludeFilesOrDirs -and 
+                    $allDirs -notcontains $_.FullName
+                }
+
+                # Add unique subdirectories to the recursiveDirs list
+                foreach ($subDir in $subDirs) {
+                    if ($allDirs -notcontains $subDir.FullName) {
+                        $allDirs += $subDir.FullName
+                        $recursiveDirs += $subDir
+                    }
+                }
+            }
+        }
+        
         $dirCount = $recursiveDirs.Count
         $dirIndex = 0
 
-        foreach ($dir in $($recursiveDirs| Select-Object -Unique)) {
+        foreach ($dir in $recursiveDirs) {
             $dirIndex++
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             
@@ -2374,14 +2395,24 @@ function checkCreds {
                 )
             } 
 
-            $files = $files |
+            foreach ($file in $files) {
+                if (-not ($allFiles -contains $file.FullName)) {
+                    $allFiles += $file.FullName
+                }
+            }
+
+            $files = $allFiles |
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
 
             # Add files to global list
-            $allFiles += $files
+            foreach ($file in $files) {
+                if (-not ($allFiles -contains $file.FullName)) {
+                    $allFiles += $file.FullName
+                }
+            }
 
             # Output number of files found in the directory
             $totalFilesInDir = $files.Count
@@ -2400,7 +2431,7 @@ function checkCreds {
 
         if ($DEBUG_MODE) { Write-Output "allFiles: $allFiles" }
 
-        foreach ($file in $($allFiles | Select-Object -Unique)) {
+        foreach ($file in $allFiles) {
             $currentFileIndex++
             $fileSizeMB = 0
             try {
