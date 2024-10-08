@@ -236,6 +236,7 @@ To our defense: Powershell `Select-String -Pattern` is lightyears behind Linux `
 
 Credential search is always a balancing act, we're happy with this config as it is, but it will **certainly** not match every scenario, machine and probably not CTFs. 
 ```
+Processing Files                                                                                                                                               Processing file 254 of 2946 - C:\Users\occide\testuser\bookmarks-2024-04-21.json - 1 MB                                                                      [oooooooooooo                                                                                                                                    ]                                                                                              
 [💀] Looking for easy creds...
 
 Momentan gespeicherte Anmeldeinformationen:
@@ -288,6 +289,9 @@ Additional matches in this file: 1
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 [+] [Private Key] File: C:\Users\testuser\.ssh\id_rsa_old
 Line 1: -----BEGIN RSA PRIVATE KEY-----
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[+] [username and password in URL] File: C:\Users\testuser\LinkShortener_WebApp\.env
+Line 1: MONGODB_URI=mongodb://testuser:IhAn3325JAnql_AIhn335a@127.0.0.1:27017/privurl
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------ 
 [+] Total Matches: 584
