@@ -2351,7 +2351,7 @@ function checkCreds {
         foreach ($dir in $dirsToSearch) {
             if ($searchedDirs -contains $dir) { continue }
             $resolvedDir = Resolve-Path -Path $dir -ErrorAction SilentlyContinue
-            if (-not $resolvedDir) { $searchedDirs += $dir }
+            if (-not $resolvedDir) { $searchedDirs += $dir; continue }
             else { $searchedDirs += $resolvedDir.Path }
     
             $dirIndex++
@@ -2366,7 +2366,7 @@ function checkCreds {
         foreach ($dir in $recursiveDirs) {
             if ($searchedDirs -contains $dir) { continue }
             $resolvedDir = Resolve-Path -Path $dir -ErrorAction SilentlyContinue
-            if (-not $resolvedDir) { $searchedDirs += $dir }
+            if (-not $resolvedDir) { $searchedDirs += $dir; continue }
             else { $searchedDirs += $resolvedDir.Path }
 
             $dirIndex++
@@ -2385,19 +2385,21 @@ function checkCreds {
                 )
             } 
 
+            # Avoid dups before making "costly" Get-Acl
+            $searchedFiles = @()
             foreach ($file in $files) {
-                if (-not ($allFiles -contains $file.FullName)) {
-                    $allFiles += $file.FullName
+                if (-not ($searchedFiles -contains $file.FullName)) {
+                    $searchedFiles += $file.FullName
                 }
             }
 
-            $files = $allFiles |
+            $files = $searchedFiles |
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
 
-            # Add files to global list
+            # Add files to global list - again avoid dups against total list
             foreach ($file in $files) {
                 if (-not ($allFiles -contains $file.FullName)) {
                     $allFiles += $file.FullName
