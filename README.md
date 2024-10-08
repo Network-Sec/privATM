@@ -236,7 +236,10 @@ To our defense: Powershell `Select-String -Pattern` is lightyears behind Linux `
 
 Credential search is always a balancing act, we're happy with this config as it is, but it will **certainly** not match every scenario, machine and probably not CTFs. 
 ```
-Processing Files                                                                                                                                               Processing file 254 of 2946 - C:\Users\occide\testuser\bookmarks-2024-04-21.json - 1 MB                                                                      \[oooooooooooo                                                                                                                                    \]                                                                                              
+Processing Files
+Processing file 254 of 2946 - C:\Users\occide\testuser\bookmarks-2024-04-21.json - 1 MB
+\[oooooooooooo                                                                                                                                    \]
+                                                                                 
 [💀] Looking for easy creds...
 
 Momentan gespeicherte Anmeldeinformationen:
