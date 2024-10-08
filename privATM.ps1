@@ -2436,7 +2436,7 @@ function checkCreds {
         
         if ($DEBUG_MODE) { Write-Output "allFiles: $($allFiles.Values)" }
 
-        foreach ($file in $allFiles) {
+        foreach ($file in $allFiles.Values) {
             $currentFileIndex++
             $fileSizeMB = 0
             try {
