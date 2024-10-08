@@ -238,7 +238,7 @@ Credential search is always a balancing act, we're happy with this config as it 
 ```
 Processing Files
 Processing file 254 of 2946 - C:\Users\occide\testuser\bookmarks-2024-04-21.json - 1 MB
-[oooooooooooo                                                                                                                                    ]
+[oooooooooooo                                                                                    ]
                                                                                  
 [💀] Looking for easy creds...
 
