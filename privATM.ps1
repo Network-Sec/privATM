@@ -2322,7 +2322,7 @@ function checkCreds {
             @{ type = 'filename'; match = '.ftpconfig'; name = 'Created by sftp-deployment for Atom, contains server details and credentials' }
         )
 
-        $excludeFilesOrDirs = 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|include|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|blender|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale|netcore|net.core|asp.net|jdk|native|wow64|amd64_|wowcore|wow.core|' 
+        $excludeFilesOrDirs = 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|include|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|blender|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale|netcore|net.core|asp.net|jdk|native|wow64|amd64_|wowcore|wow.core' 
 
         $excludeExtensions  = @('*.exe', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.tiff', '*.tif', '*.psd', '*.xcf', '*.zip', '*.tar.gz', '*.ttf', '*.lock')
 
@@ -2349,32 +2349,42 @@ function checkCreds {
         $dirCount = $dirsToSearch.Count
         $searchedDirs = @()
         foreach ($dir in $dirsToSearch) {
-            if ($searchedDirs -contains $dir) { continue }
-            $resolvedDir = Resolve-Path -Path $dir -ErrorAction SilentlyContinue
-            if (-not $resolvedDir) { $searchedDirs += $dir; continue }
-            else { $searchedDirs += $resolvedDir.Path }
-            $resolvedDir = $null
+            if ($searchedDirs | Where-Object { $_ -ieq $dir }) { continue }
 
-            $dirIndex++
+            $resolvedDir = (Resolve-Path -Path "$dir" -ErrorAction SilentlyContinue).Path
+            if (-not $resolvedDir) { $searchedDirs += $dir; continue }
+            else { 
+                if ($searchedDirs | Where-Object { $_ -ieq $resolvedDir }) { continue }
+                $searchedDirs += $resolvedDir
+                $dir = $resolvedDir
+            }
+
             Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
-            $recursiveDirs += Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
+                  
+            $recursiveResult = Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
             Where-Object { $_.FullName -notmatch $excludeFilesOrDirs }
+            $recursiveDirs += ($recursiveResult | Foreach-Object { $_.FullName })
+            $dirIndex++
         }
 
         $dirCount = $recursiveDirs.Count
+        Write-Output "[*] Recursive Directory count: $dirCount"
         $dirIndex = 0
-        $searchedDirs = @()
+        $searchedSubDirs = @()
         foreach ($dir in $recursiveDirs) {
-            if ($searchedDirs -contains $dir) { continue }
-            $resolvedDir = Resolve-Path -Path $dir -ErrorAction SilentlyContinue
-            if (-not $resolvedDir) { $searchedDirs += $dir; continue }
-            else { $searchedDirs += $resolvedDir.Path }
-            $resolvedDir = $null
+            if ($searchedSubDirs | Where-Object { $_ -ieq $dir }) { continue }
+
+            $resolvedDir = (Resolve-Path -Path "$dir" -ErrorAction SilentlyContinue).Path
+            if (-not $resolvedDir) { $searchedSubDirs += $dir; continue }
+            else { 
+                if ($searchedSubDirs | Where-Object { $_ -ieq $resolvedDir }) { continue }
+                $searchedSubDirs += $resolvedDir
+                $dir = $resolvedDir
+            }
+            if ($dir -match $excludeFilesOrDirs) { continue }
 
             $dirIndex++
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
-            
-            if ($dir.FullName -match $excludeFilesOrDirs) { continue }
             
             # Collect files for current directory
             $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -ErrorAction SilentlyContinue -Force | 
@@ -2386,21 +2396,28 @@ function checkCreds {
                     $_.Name -match $includeListRegex
                 )
             } 
+            if ($files.Length -eq 0) { continue }
 
             # Avoid dups before making "costly" Get-Acl
             $searchedFiles = @()
             foreach ($file in $files) {
-                $resolvedFile = Resolve-Path -Path $file -ErrorAction SilentlyContinue
-                if (-not $resolvedFile) { $searchedFiles += $file; continue }
-                else { $searchedFiles += $resolvedFile.Path }
-                $resolvedFile = $null
-            }
+                if ($searchedFiles | Where-Object { $_ -ieq $file.FullName }) { continue }
 
+                $resolvedFile = (Resolve-Path -Path $file.FullName -ErrorAction SilentlyContinue).Path
+                if (-not $resolvedFile) { $searchedFiles += $file.FullName; continue }
+                else { 
+                    if ($searchedFiles | Where-Object { $_ -ieq $resolvedFile }) { continue }
+                    $searchedFiles += $resolvedFile
+                }
+            }
+            
             $files = $searchedFiles |
             Where-Object { 
-                ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
-                ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
+                ((Get-Acl "$_").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
+                ((Get-Acl "$_").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
             }
+
+            if ($files.Length -eq 0) { continue }
 
             # Add files to global list - again avoid dups against total list
             foreach ($file in $files) {
