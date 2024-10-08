@@ -2400,7 +2400,7 @@ function checkCreds {
 
         if ($DEBUG_MODE) { Write-Output "allFiles: $allFiles" }
 
-        foreach ($file in $allFiles) {
+        foreach ($file in $($allFiles | Select-Object -Unique)) {
             $currentFileIndex++
             $fileSizeMB = 0
             try {
