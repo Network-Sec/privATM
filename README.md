@@ -274,9 +274,12 @@ Line 1: -----BEGIN OPENSSH PRIVATE KEY-----
 Line 1: - author: example (testuser@gmail.com)
 
 Additional matches in this file: 126
+
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
-[+] [Private Key] File: C:\Users\testuser\.ssh\id_rsa (2)
-Line 1: -----BEGIN RSA PRIVATE KEY-----
+[+] [password] File: C:\Users\testuser\embedding\ollama_embedder.py
+Line 1: edis.Redis(host='192.168.178.16', port=3379, db=0, password='my_redis_Pa$$wOrD')
+
+Additional matches in this file: 1
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 [+] [Private Key] File: C:\Users\testuser\.ssh\id_rsa_old
