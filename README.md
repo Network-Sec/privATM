@@ -63,7 +63,7 @@ Of course, there are more ways to do this, but if you're lucky enough, this is p
 ```
 
 ## Bloodhound Data Collection
-We started working on data collection for Bloodhound ingestion - not sure if we can achieve compatibility in the end, but we'll keep working on it.
+We started working on data collection for Bloodhound ingestion, a `Sharphound` replacement, albeit "replacement" would be a vast overstatement. We don't know yet, if we can achieve compatibility in the end, but we'll keep working on it. Either way, our Bloodhound-Module already brings the collection of a broad range of data from different areas, like `Named Pipes`, `Network Shares` etc. which in itself is really useful for `Privilege Escalation` attempts. 
 
 ```
 [💀] Starting additional SH-focused collection...
