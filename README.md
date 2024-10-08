@@ -26,8 +26,8 @@ Technique
 4. WMI Event Subscription Abuse     12. Exploiting Weak EFS Settings
 5. Token Impersonation/Manipulation 13. Certify SAN
 6. Registry Key Abuse               14. Check for presence of vuln drivers
-7. CVE-2021-36934 (SAM Hive Access) 15. Run additional checks for SH collection
-8. Autorun Program Abuse
+7. CVE-2021-36934 (SAM Hive Access) 15. Check for creds (only quick wins)
+8. Autorun Program Abuse            16. Run additional checks for SH collection
 
 
 a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
@@ -46,7 +46,6 @@ Your selection: 1
 [+] SeTimeZonePrivilege     Allows changing the time zone. Not generally useful for privilege escalation.
 [+] SeUndockPrivilege       Allows a machine to be undocked. Generally not useful for privilege escalation.
 
-
 [💀] Testing SeChangeNotifyPrivilege...
 [+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path
 ```
@@ -55,8 +54,7 @@ Your selection: 1
 Of course, there are more ways to do this, but if you're lucky enough, this is probably the quickest and easiest. 
 
 ```
-Your selection: 2
-[*] Trying to find writable env-path before System32...
+[💀] Trying to find writable env-path before System32...
 [+] E:\Program Files (x86)\IncrediBuild
 [+] C:\NASM
 [+] D:\AI-Tools\Ollama
@@ -68,7 +66,6 @@ Your selection: 2
 We started working on data collection for Bloodhound ingestion - not sure if we can achieve compatibility in the end, but we'll keep working on it.
 
 ```
-Your selection: 15
 [💀] Starting additional SH-focused collection...
 Note: This is not intended to be run alone, but relies on data
 from the other checks.
