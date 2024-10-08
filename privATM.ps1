@@ -2347,38 +2347,23 @@ function checkCreds {
         Write-Output "[*] Starting directory & file discovery recursively, this will take a while..."
         $dirIndex = 0
         $dirCount = $dirsToSearch.Count
-        $allDirs = @()
-        $recursiveDirs = @()
-
+        $searchedDirs = @()
         foreach ($dir in $dirsToSearch) {
+            if ($searchedDirs -contains $dir) { continue }
+            $searchedDirs += $dir
             $dirIndex++
             Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
-
-            # Check if directory has already been processed
-            if ($allDirs -notcontains $dir) {
-                $allDirs += $dir
-
-                # Get child directories recursively and ensure no duplicates
-                $subDirs = Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction SilentlyContinue | 
-                Where-Object { 
-                    $_.FullName -notmatch $excludeFilesOrDirs -and 
-                    $allDirs -notcontains $_.FullName
-                }
-
-                # Add unique subdirectories to the recursiveDirs list
-                foreach ($subDir in $subDirs) {
-                    if ($allDirs -notcontains $subDir.FullName) {
-                        $allDirs += $subDir.FullName
-                        $recursiveDirs += $subDir
-                    }
-                }
-            }
+            $recursiveDirs += Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
+            Where-Object { $_.FullName -notmatch $excludeFilesOrDirs }
         }
-        
+
         $dirCount = $recursiveDirs.Count
         $dirIndex = 0
-
+        $searchedDirs = @()
         foreach ($dir in $recursiveDirs) {
+            if ($searchedDirs -contains $dir) { continue }
+            $searchedDirs += $dir
+            
             $dirIndex++
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             
