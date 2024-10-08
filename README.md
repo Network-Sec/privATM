@@ -226,3 +226,65 @@ Your selection: 14
 [+] PROCEXP152.sys is present at C:\Windows\System32\drivers\PROCEXP152.SYS
 Driver for Process Explorer, potential to allow privilege escalation by exploiting weak IOCTL. Medium severity.
 ```
+
+## Cred Search
+We carefully implemented a `credential discovery` logic, trying to balance speed, coverage and false-positives / true-positives rate. At least on our test system we get very good results, but the search is far from instant (about 15min recursive search on a real system, mainly C:\ drive, including user folders, program data & files and env-pathes, the *usual suspects*). We built in rather complex patterns for both file selection as well as "greping" - that means, even though we iterate over more than 10.000 subdirs, the final list of files we actually perform regex content search is less than 3000 items. 
+
+Credential search is always a balancing act, we're happy with this config as it is, but it will **certainly** not match every scenario, machine and probably not CTFs. 
+```
+[💀] Looking for easy creds...
+
+Momentan gespeicherte Anmeldeinformationen:
+
+    Ziel: MicrosoftAccount:target=SSO_POP_User:user=example@gmx.com
+    Typ: Allgemeine
+    Benutzer: example@gmx.com
+    Nur für diese Sitzung gespeichert
+
+    Ziel: MicrosoftAccount:target=SSO_POP_Device
+    Typ: Allgemeine
+    Benutzer: asfrtgbfnosgd2iq
+    Nur für diese Sitzung gespeichert
+
+    Ziel: LegacyGeneric:target=sftp://root@81.110.150.18
+    Typ: Allgemeine
+    Benutzer: root
+
+[+] Browser Creds match, file is accessible: C:\Users\testuser\AppData\Local\Google\Chrome\User Data\Default\Login Data
+[+] Browser Creds match, file is accessible: C:\Users\testuser\AppData\Local\BraveSoftware\Brave-Browser\User Data\Default\Login Data
+[+] Browser Creds match, file is accessible: C:\Users\testuser\AppData\Local\Microsoft\Edge\User Data\Default\Login Data
+[+] Browser Creds match, file is accessible: C:\Users\testuser\AppData\Roaming\Mozilla\Firefox\Profiles\va21nfat.default-release\logins.json
+[+] Browser Creds match, file is accessible: C:\Users\testuser\AppData\Roaming\Mozilla\Firefox\Profiles\4zzo5h1t.default-release\logins.json
+
+[💀] Scanning for creds in files
+[*] Starting directory & file discovery recursively, this will take a while...
+[*] Total files to search: 2946
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[+] [Email Address] File: C:\Users\testuser\.autogenstudio\database.sqlite
+Line 1: U3AE5663ec93-f6db-4f7e-8f37-68bd05fe155dguestuser@gmail.com2024-06-12T01:00:05.244355ll
+
+Additional matches in this file: 34
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[+] [Private Key] File: C:\Users\testuser\.ollama\id_ed25519
+Line 1: -----BEGIN OPENSSH PRIVATE KEY-----
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[+] [Email Address] File: C:\Users\testuser\.recon-ng\modules.yml
+Line 1: - author: example (testuser@gmail.com)
+
+Additional matches in this file: 126
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[+] [Private Key] File: C:\Users\testuser\.ssh\id_rsa (2)
+Line 1: -----BEGIN RSA PRIVATE KEY-----
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[+] [Private Key] File: C:\Users\testuser\.ssh\id_rsa_old
+Line 1: -----BEGIN RSA PRIVATE KEY-----
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------ 
+[+] Total Matches: 584
+
+[?] If you're in a desktop session, should we display all findings in a new Desktop-Window (y/n)?
+```
+When the search is finished, we offer the user to display results in a `Grid-View`, a Windows Desktop list-window that can be sorted and filtered.
