@@ -2126,7 +2126,7 @@ function checkCreds {
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files"
 
-        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
+        $dirsToSearch = @("$env:USERPROFILE")#, "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
 
         $regexPatterns = @(
             @{ type = 'contents'; regex = 'A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA[A-Z0-9]{16}'; name = 'AWS Access Key ID Value' },
@@ -2496,14 +2496,6 @@ function checkCreds {
                             $firstCoupleMatches = $findings
                         }
 
-                        # Add findings to the global object
-                        foreach ($mt in $firstCoupleMatches) {
-                            $gCollect.Credentials += [PSCustomObject]@{
-                                FileName = $file
-                                Matches  = $mt
-                            }
-                        }
-
                         # Display the first match
                         $firstFinding = $findings[0]
                         $line = $firstFinding.Line
@@ -2525,6 +2517,15 @@ function checkCreds {
                                 break
                             }
                         }        
+
+                        # Add findings to the global object
+                        foreach ($mt in $firstCoupleMatches) {
+                            $gCollect.Credentials += [PSCustomObject]@{
+                                FileName = $file
+                                Type = $patType
+                                Matches  = $mt
+                            }
+                        }
 
                         Write-Output "[+] $patType File: $($file)"
                         Write-Output "Line $($firstFinding.LineNumber)`: $snippet"
