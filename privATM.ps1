@@ -2440,12 +2440,12 @@ function checkCreds {
             $currentFileIndex++
             $fileSizeMB = 0
             try {
-                $fileItem = Get-Item $file.FullName -ErrorAction SilentlyContinue
+                $fileItem = Get-Item $file -ErrorAction SilentlyContinue
                 $fileSizeMB = if ($null -eq $fileItem) { 0 } else { [math]::ceiling($fileItem.Length / 1MB) }
             }
             catch {
                 if ($DEBUG_MODE) { 
-                    Write-Output "[!] Error getting file size for: $($file.FullName)" 
+                    Write-Output "[!] Error getting file size for: $($file)" 
                 }
             }
 
@@ -2455,15 +2455,15 @@ function checkCreds {
             Write-Progress -Activity "Processing Files" -Status "Processing file $currentFileIndex of $totalFileCount - $file - $fileSizeMB MB" -PercentComplete (($currentFileIndex / $totalFileCount) * 100)
 
             try {
-                if ($DEBUG_MODE) { Write-Output "$($file.FullName) | $fileSizeMB"}
+                if ($DEBUG_MODE) { Write-Output "$($file) | $fileSizeMB"}
                 if ($fileSizeMB -gt 4) {
                     Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                     Write-Output ""
-                    Write-Output "[+] File: $($file.FullName)"
+                    Write-Output "[+] File: $($file)"
                     Write-Output "Filename / Extension match. Filesize: $fileSizeMB MB, skipping content scan."
                     Write-Output ""
                 } else {
-                    $fileContent = Get-Content -Path $file.FullName -ErrorAction SilentlyContinue
+                    $fileContent = Get-Content -Path $file -ErrorAction SilentlyContinue
 
                     if ($fileContent.Length -le 0) { continue }
                     
@@ -2499,7 +2499,7 @@ function checkCreds {
                         # Add findings to the global object
                         foreach ($mt in $firstCoupleMatches) {
                             $gCollect.Credentials += [PSCustomObject]@{
-                                FileName = $file.FullName
+                                FileName = $file
                                 Matches  = $mt
                             }
                         }
@@ -2526,7 +2526,7 @@ function checkCreds {
                             }
                         }        
 
-                        Write-Output "[+] $patType File: $($file.FullName)"
+                        Write-Output "[+] $patType File: $($file)"
                         Write-Output "Line $($firstFinding.LineNumber)`: $snippet"
                         Write-Output ""
 
@@ -2538,7 +2538,7 @@ function checkCreds {
                     }
                 }
             } catch {
-                if ($DEBUG_MODE) { Write-Output "Could not read file: $($file.FullName), Error: $_" }
+                if ($DEBUG_MODE) { Write-Output "Could not read file: $($file), Error: $_" }
             }
         }
 
