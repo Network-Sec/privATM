@@ -60,7 +60,7 @@ Your selection: 1
 ```
 
 ## Env Pathes
-Of course, there are more ways to do this, however this is probably the quickest and easiest. 
+Of course, there are more ways to do this, but if you're lucky enough, this is probably the quickest and easiest. 
 
 ```
 Your selection: 2
