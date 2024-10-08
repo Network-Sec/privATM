@@ -1,26 +1,18 @@
 # privATM
 Yet Another PrivEsc &amp; User Enum Script
 
-We started working on a script, that can be used on real systems, focussing on things that:
-- Still work > 2024
-- Can be exploited in pure `Powershell` / `C#` code - so your AMSI evaded shell won't suck as hard
-- Doesn't take forever to run
-- Light-weight script that won't trigger much
-
-CTF scripts like WinPEAS are awesome, but on real systems it can take forever to run - if you can get it to run without triggering 100 alerts.
+We started working on a script, that can be used on real systems.
 
 ## WIP - Work In Progress
-We just started working on this. Come back in 3 months or later - we already made good progress but are still far from what we'd like to deliver in the final version. 
-
-`Note:` ATM there's a ton of `C#` code at the beginning of the script, we'll weed that out before the first 1.0 release, and maybe make a light / stealth / powershell-only version. Just ignore it for now, some of it is actually used, some is experimental.
+We already made good progress but are still far from what we'd like to deliver in the final version. 
 
 ### TODO list
 - Certify
 - Potatoes
 - Bloodhound compatible data
 - Extra Stealth Mode: No `whoami` etc.
-
-(may or may not happen)
+- Vuln Driver exploit
+- etc.
 
 ## Usage Example
 ```
@@ -73,9 +65,7 @@ Your selection: 2
 ```
 
 ## Bloodhound Data Collection
-We started working on data collection for Bloodhound ingestion. Because Sharphound is heavily flagged (including the reflective powershell loader), we're trying to incorporate a **light / stealth** enum for similar data - not sure if we can achieve compatibility in the end, but we'll keep working on it, or provide our own frontend.
-
-We consider `privileges` (also 2nd hand, through a group or machine) as rather **well-known** and usually easy path, that Pentesters should quickly recognize (if they can be enumerated that is). So we may resort towards a rather quick print-out in bright-green colour, if it becomes too complicated to implement.
+We started working on data collection for Bloodhound ingestion - not sure if we can achieve compatibility in the end, but we'll keep working on it.
 
 ```
 Your selection: 15
@@ -170,9 +160,7 @@ Path       : C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 ```
 
 ## Vuln Drivers
-Loading of vulnerable drivers like `Capcom.sys` (not included, put in same folder) when `SeLoadDriverPrivilege` is present as well as generic check for common vulnerable drivers already installed on the system.
-
-We haven't yet fully tested if we can pull off driver loading, purely with Powershell / c# - it's right now one of many TODO items that may or may not work in the end. The exploitation of already installed drivers should however work anyways.
+Detection and eventually loading & exploitation of vulnerable drivers like `Capcom.sys` (not included, put in same folder) when `SeLoadDriverPrivilege` is present as well as generic check for common vulnerable drivers already installed on the system.
 
 ```
 Your selection: 14
@@ -183,11 +171,7 @@ Driver for Process Explorer, potential to allow privilege escalation by exploiti
 ```
 
 ## Cred Search
-We carefully implemented a `credential discovery` logic, trying to balance speed, coverage and false-positives / true-positives rate. At least on our test system we get very good results, but the search is far from instant (about 15min recursive search on a real system, mainly C:\ drive, including user folders, program data & files and env-pathes, the *usual suspects*). You can easily adjust the search within the code, if you need more speed, have a look at the maximum file size for regex search among other things.
-
-We built in rather complex patterns for both file selection as well as "greping" - that means, even though we iterate over more than 10.000 subdirs, the final list of files we actually perform regex content search is less than 3000 items. 
-
-To our defense: Powershell `Select-String -Pattern` is lightyears behind Linux `grep` - in terms of speed and flexibility, that means we had to compromise and also do some workarounds, cause it would otherwise choke on larger files and on very long lines.
+We carefully implemented a `credential discovery` logic, trying to balance speed, coverage and false-positives / true-positives rate. 
 
 Credential search is always a balancing act, we're happy with this config as it is, but it will **certainly** not match every scenario, machine and probably not CTFs. 
 ```
