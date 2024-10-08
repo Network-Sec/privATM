@@ -228,7 +228,7 @@ Driver for Process Explorer, potential to allow privilege escalation by exploiti
 ```
 
 ## Cred Search
-We carefully implemented a `credential discovery` logic, trying to balance speed, coverage and false-positives / true-positives rate. At least on our test system we get very good results, but the search is far from instant (about 15min recursive search on a real system, mainly C:\ drive, including user folders, program data & files and env-pathes, the *usual suspects*). 
+We carefully implemented a `credential discovery` logic, trying to balance speed, coverage and false-positives / true-positives rate. At least on our test system we get very good results, but the search is far from instant (about 15min recursive search on a real system, mainly C:\ drive, including user folders, program data & files and env-pathes, the *usual suspects*). You can easily adjust the search within the code, if you need more speed, have a look at the maximum file size for regex search among other things.
 
 We built in rather complex patterns for both file selection as well as "greping" - that means, even though we iterate over more than 10.000 subdirs, the final list of files we actually perform regex content search is less than 3000 items. 
 
