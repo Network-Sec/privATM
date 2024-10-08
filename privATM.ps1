@@ -2340,108 +2340,101 @@ function checkCreds {
         $includeAttribs = 'Archive,Directory,Hidden,Normal,NotContentIndexed,ReadOnly,System,Temporary'
 
         $totalMatches = 0
-        $allFiles = @() 
-        $recursiveDirs = @() 
+        $dirIndex = 0
+        $dirCount = $dirsToSearch.Count
+        $searchedDirs = @{} # [System.Collections.Generic.HashSet]
+        $allFiles = @{}
+        $recursiveDirs = @{} 
 
         # We split processing a bit to get better feedback to the user - it's not really necessary
         Write-Output "[*] Starting directory & file discovery recursively, this will take a while..."
-        $dirIndex = 0
-        $dirCount = $dirsToSearch.Count
-        $searchedDirs = @()
+
         foreach ($dir in $dirsToSearch) {
-            if ($searchedDirs | Where-Object { $_ -ieq $dir }) { continue }
-
+            if ($searchedDirs.ContainsKey($dir.ToLower())) { continue }
+        
             $resolvedDir = (Resolve-Path -Path "$dir" -ErrorAction SilentlyContinue).Path
-            if (-not $resolvedDir) { $searchedDirs += $dir; continue }
-            else { 
-                if ($searchedDirs | Where-Object { $_ -ieq $resolvedDir }) { continue }
-                $searchedDirs += $resolvedDir
-                $dir = $resolvedDir
-            }
-
+            if (-not $resolvedDir) {
+                $searchedDirs[$dir.ToLower()] = $dir
+                continue
+            } 
+            if ($searchedDirs.ContainsKey($resolvedDir.ToLower())) { continue }
+            
+            $searchedDirs[$resolvedDir.ToLower()] = $resolvedDir
+            $dir = $resolvedDir
+        
             Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
-                  
-            $recursiveResult = Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
-            Where-Object { $_.FullName -notmatch $excludeFilesOrDirs }
-            $recursiveDirs += ($recursiveResult | Foreach-Object { $_.FullName })
+            
+            $recursiveResult = Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction SilentlyContinue | 
+                Where-Object { $_.FullName -notmatch $excludeFilesOrDirs }
+            
+            foreach ($subDir in $recursiveResult) {
+                $subDirPath = $subDir.FullName.ToLower()
+                if (-not $recursiveDirs.ContainsKey($subDirPath)) {
+                    $recursiveDirs[$subDirPath] = $subDir.FullName
+                }
+            }
+        
             $dirIndex++
         }
-
+        
         $dirCount = $recursiveDirs.Count
         Write-Output "[*] Recursive Directory count: $dirCount"
         $dirIndex = 0
-        $searchedSubDirs = @()
-        foreach ($dir in $recursiveDirs) {
-            if ($searchedSubDirs | Where-Object { $_ -ieq $dir }) { continue }
-
+        
+        foreach ($dir in $recursiveDirs.Values) {
+            if ($searchedDirs.ContainsKey($dir.ToLower())) { continue }
+        
             $resolvedDir = (Resolve-Path -Path "$dir" -ErrorAction SilentlyContinue).Path
-            if (-not $resolvedDir) { $searchedSubDirs += $dir; continue }
-            else { 
-                if ($searchedSubDirs | Where-Object { $_ -ieq $resolvedDir }) { continue }
-                $searchedSubDirs += $resolvedDir
-                $dir = $resolvedDir
-            }
+            if (-not $resolvedDir) {
+                $searchedDirs[$dir.ToLower()] = $dir
+                continue
+            } 
+            if ($searchedDirs.ContainsKey($resolvedDir.ToLower())) { continue }
+            
+            $searchedDirs[$resolvedDir.ToLower()] = $resolvedDir
+            $dir = $resolvedDir
             if ($dir -match $excludeFilesOrDirs) { continue }
-
+        
             $dirIndex++
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
-            
+        
             # Collect files for current directory
             $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -ErrorAction SilentlyContinue -Force | 
-            Where-Object { 
-                $_.Extension -notmatch $excludeExtensionsRegex -and
-                $_.FullName -notmatch $excludeFilesOrDirs -and (
-                    $_.Extension -match $includeListRegex -or
-                    $_.Name.ToLower() -in $includeListLiteral -or
-                    $_.Name -match $includeListRegex
-                )
-            } 
+                Where-Object { 
+                    $_.Extension -notmatch $excludeExtensionsRegex -and
+                    $_.FullName -notmatch $excludeFilesOrDirs -and (
+                        $_.Extension -match $includeListRegex -or
+                        $_.Name.ToLower() -in $includeListLiteral -or
+                        $_.Name -match $includeListRegex
+                    )
+                }
+        
             if ($files.Length -eq 0) { continue }
-
-            # Avoid dups before making "costly" Get-Acl
-            $searchedFiles = @()
+        
+            # Add files to global list - avoid dups using hashtable
             foreach ($file in $files) {
-                if ($searchedFiles | Where-Object { $_ -ieq $file.FullName }) { continue }
-
-                $resolvedFile = (Resolve-Path -Path $file.FullName -ErrorAction SilentlyContinue).Path
-                if (-not $resolvedFile) { $searchedFiles += $file.FullName; continue }
-                else { 
-                    if ($searchedFiles | Where-Object { $_ -ieq $resolvedFile }) { continue }
-                    $searchedFiles += $resolvedFile
+                $filePath = $file.FullName.ToLower()
+                if (-not $allFiles.ContainsKey($filePath)) {
+                    $allFiles[$filePath] = $file.FullName
                 }
             }
-            
-            $files = $searchedFiles |
-            Where-Object { 
-                ((Get-Acl "$_").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
-                ((Get-Acl "$_").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
-            }
-
-            if ($files.Length -eq 0) { continue }
-
-            # Add files to global list - again avoid dups against total list
-            foreach ($file in $files) {
-                if (-not ($allFiles -contains $file.FullName)) {
-                    $allFiles += $file.FullName
-                }
-            }
-
+        
             # Output number of files found in the directory
             $totalFilesInDir = $files.Count
             if ($DEBUG_MODE) {
                 Write-Output "[*] Matching files in $dir`: $totalFilesInDir"
             }
         }
-
+        
         Write-Output "[*] Total files to search: $($allFiles.Count)"
         Write-Progress -Activity "Building File List" -Status "Completed" -Completed
         $totalFileCount = $allFiles.Count
         $currentFileIndex = 0
-
-        # Avoid regex match hanging / crashing on infinitely long lines
+        
+        # Avoid regex match hanging/crashing on infinitely long lines
         $maxLineLength = 400
-
-        if ($DEBUG_MODE) { Write-Output "allFiles: $allFiles" }
+        
+        if ($DEBUG_MODE) { Write-Output "allFiles: $($allFiles.Values)" }
 
         foreach ($file in $allFiles) {
             $currentFileIndex++
