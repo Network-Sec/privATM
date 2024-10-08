@@ -2353,7 +2353,8 @@ function checkCreds {
             $resolvedDir = Resolve-Path -Path $dir -ErrorAction SilentlyContinue
             if (-not $resolvedDir) { $searchedDirs += $dir; continue }
             else { $searchedDirs += $resolvedDir.Path }
-    
+            $resolvedDir = $null
+
             $dirIndex++
             Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             $recursiveDirs += Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
@@ -2368,6 +2369,7 @@ function checkCreds {
             $resolvedDir = Resolve-Path -Path $dir -ErrorAction SilentlyContinue
             if (-not $resolvedDir) { $searchedDirs += $dir; continue }
             else { $searchedDirs += $resolvedDir.Path }
+            $resolvedDir = $null
 
             $dirIndex++
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
@@ -2388,9 +2390,10 @@ function checkCreds {
             # Avoid dups before making "costly" Get-Acl
             $searchedFiles = @()
             foreach ($file in $files) {
-                if (-not ($searchedFiles -contains $file.FullName)) {
-                    $searchedFiles += $file.FullName
-                }
+                $resolvedFile = Resolve-Path -Path $file -ErrorAction SilentlyContinue
+                if (-not $resolvedFile) { $searchedFiles += $file; continue }
+                else { $searchedFiles += $resolvedFile.Path }
+                $resolvedFile = $null
             }
 
             $files = $searchedFiles |
