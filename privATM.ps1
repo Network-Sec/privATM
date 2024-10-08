@@ -2322,7 +2322,7 @@ function checkCreds {
             @{ type = 'filename'; match = '.ftpconfig'; name = 'Created by sftp-deployment for Atom, contains server details and credentials' }
         )
 
-        $excludeFilesOrDirs = 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|blender|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale' 
+        $excludeFilesOrDirs = 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|include|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|blender|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale|netcore|net.core|asp.net|jdk|native' 
 
         $excludeExtensions  = @('*.exe', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.tiff', '*.tif', '*.psd', '*.xcf', '*.zip', '*.tar.gz', '*.ttf', '*.lock')
 
@@ -2420,7 +2420,7 @@ function checkCreds {
 
             try {
                 if ($DEBUG_MODE) { Write-Output "$($file.FullName) | $fileSizeMB"}
-                if ($fileSizeMB -gt 40) {
+                if ($fileSizeMB -gt 4) {
                     Write-Output ("-" * $Host.UI.RawUI.WindowSize.Width)
                     Write-Output ""
                     Write-Output "[+] File: $($file.FullName)"
