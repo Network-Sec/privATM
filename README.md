@@ -60,24 +60,6 @@ Your selection: 1
 ```
 
 ```
-$ .\privATM.ps1
-
-Technique
----------                           -------------------------------------------
-1. SePrivileges                     9. Insecure GPO Permissions
-2. Service Misconfigurations        10. COM Object Abuse
-3. Scheduled Tasks                  11. DCOM Lateral Movement
-4. WMI Event Subscription Abuse     12. Exploiting Weak EFS Settings
-5. Token Impersonation/Manipulation 13. Certify SAN
-6. Registry Key Abuse               14. Check for presence of vuln drivers
-7. CVE-2021-36934 (SAM Hive Access) 15. Run additional checks for SH collection
-8. Autorun Program Abuse
-
-
-a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
-
-Enter number(s) (e.g., 1,5-7,9) or 'a' for all...
-
 Your selection: 2
 [*] Trying to find writable env-path before System32...
 [+] E:\Program Files (x86)\IncrediBuild
@@ -168,19 +150,6 @@ AppMgmt                  Stopped Manual
 AppReadiness             Stopped Manual
 AppVClient               Stopped Disabled
 AppXSvc                  Running Manual
-asComSvc                 Running Auto
-aspnet_state             Stopped Manual
-AssignedAccessManagerSvc Stopped Manual
-AsusAppService           Running Auto
-AsusCertService          Running Auto
-AsusFanControlService    Running Auto
-ASUSOptimization         Running Auto
-ASUSProArtService        Running Auto
-ASUSSoftwareManager      Running Auto
-ASUSSwitch               Running Auto
-ASUSSystemAnalysis       Running Auto
-ASUSSystemDiagnosis      Running Auto
-
 
 [-] Group policies collection not applicable for standalone machine
 [+] Token delegation info collected
@@ -188,12 +157,9 @@ ASUSSystemDiagnosis      Running Auto
 [+] Trying to collect and reference latest 200 Events, may take a minute...
 [+] Last 200 system events collected with paths resolution, example:
 
-
 SourceName : PowerShell
 Message    : Details zur Pipelineausführung für die Befehlszeile:     Write-Output [+] Trying to collect and refe
 Path       : C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
-
-
 
 [-] No Wi-Fi profiles found
 [💀] Finished SH-focused data collection.
@@ -206,20 +172,6 @@ Loading of vulnerable drivers like `Capcom.sys` (not included, put in same folde
 We haven't yet fully tested if we can pull off driver loading, purely with Powershell / c# - it's right now one of many TODO items that may or may not work in the end. The exploitation of already installed drivers should however work anyways.
 
 ```
-Technique
----------                           -------------------------------------------
-1. SePrivileges                     9. Insecure GPO Permissions
-2. Service Misconfigurations        10. COM Object Abuse
-3. Scheduled Tasks                  11. DCOM Lateral Movement
-4. WMI Event Subscription Abuse     12. Exploiting Weak EFS Settings
-5. Token Impersonation/Manipulation 13. Certify SAN
-6. Registry Key Abuse               14. Check for presence of vuln drivers
-7. CVE-2021-36934 (SAM Hive Access) 15. Run additional checks for SH collection
-8. Autorun Program Abuse
-
-
-a - Scan & Try, all techniques  s - Scan only, all techniques  e - Enumerate system basics
-Enter number(s) (e.g., 1,5-7,9) or 'a' for all...
 Your selection: 14
 
 [💀] Looking for presence of vulnerable drivers already installed...
