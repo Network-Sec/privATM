@@ -2341,26 +2341,38 @@ function checkCreds {
 
         $totalMatches = 0
         $allFiles = @() 
+        $recursiveDirs = @() 
 
-        $dirCount = $dirsToSearch.Count
+        # We split processing a bit to get better feedback to the user - it's not really necessary
+        Write-Output "[*] Starting directory & file discovery recursively, this will take a while..."
         $dirIndex = 0
-        Write-Output "[*] Starting file discovery recursively, this will take a while..."
-
+        $dirCount = $dirsToSearch.Count
         foreach ($dir in $dirsToSearch) {
+            $dirIndex++
+            Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
+            $recursiveDirs += Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
+            Where-Object { $_.FullName -notmatch $excludeFilesOrDirs }
+        }
+
+        $dirCount = $recursiveDirs.Count
+        $dirIndex = 0
+
+        foreach ($dir in $recursiveDirs) {
             $dirIndex++
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             
             # Collect files for current directory
-            $files = Get-ChildItem -Path "$dir\*" -Recurse -Attributes $includeAttribs -ErrorAction SilentlyContinue |
+            $files = Get-ChildItem -Path "$dir\*" -Attributes $includeAttribs -ErrorAction SilentlyContinue -Force | 
             Where-Object { 
-                $_.FullName.ToLower() -notmatch $excludeFilesOrDirs -and
-                $_.Extension.ToLower() -notmatch $excludeExtensionsRegex
-            } | 
-            Where-Object { 
-                $_.Name.ToLower() -match $includeListRegex -or
-                $_.Name.ToLower() -in  $includeListLiteral -or
-                $_.Extension.ToLower() -match $includeListRegex 
-            } |
+                $_.Extension -notmatch $excludeExtensionsRegex -and
+                $_.FullName -notmatch $excludeFilesOrDirs -and (
+                    $_.Extension -match $includeListRegex -or
+                    $_.Name.ToLower() -in $includeListLiteral -or
+                    $_.Name -match $includeListRegex
+                )
+            } 
+
+            $files = $files |
             Where-Object { 
                 ((Get-Acl "$($_.FullName)").Access.IdentityReference -match "$env:USERDOMAIN\\$env:USERNAME") -or 
                 ((Get-Acl "$($_.FullName)").Owner -match "$env:USERDOMAIN\\$env:USERNAME")
