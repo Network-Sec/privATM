@@ -2350,8 +2350,10 @@ function checkCreds {
         $searchedDirs = @()
         foreach ($dir in $dirsToSearch) {
             if ($searchedDirs -contains $dir) { continue }
-            $searchedDirs += (Resolve-Path -Path $dir).Path
-            
+            $resolvedDir = Resolve-Path -Path $dir -ErrorAction SilentlyContinue
+            if (-not $resolvedDir) { $searchedDirs += $dir }
+            else { $searchedDirs += $resolvedDir.Path }
+    
             $dirIndex++
             Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             $recursiveDirs += Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
@@ -2363,7 +2365,9 @@ function checkCreds {
         $searchedDirs = @()
         foreach ($dir in $recursiveDirs) {
             if ($searchedDirs -contains $dir) { continue }
-            $searchedDirs += (Resolve-Path -Path $dir).Path
+            $resolvedDir = Resolve-Path -Path $dir -ErrorAction SilentlyContinue
+            if (-not $resolvedDir) { $searchedDirs += $dir }
+            else { $searchedDirs += $resolvedDir.Path }
 
             $dirIndex++
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
