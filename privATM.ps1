@@ -2347,7 +2347,7 @@ function checkCreds {
         Write-Output "[*] Starting directory & file discovery recursively, this will take a while..."
         $dirIndex = 0
         $dirCount = $dirsToSearch.Count
-        foreach ($dir in $dirsToSearch) {
+        foreach ($dir in $($dirsToSearch | Select-Object -Unique)) {
             $dirIndex++
             Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             $recursiveDirs += Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction  SilentlyContinue | 
@@ -2357,7 +2357,7 @@ function checkCreds {
         $dirCount = $recursiveDirs.Count
         $dirIndex = 0
 
-        foreach ($dir in $recursiveDirs) {
+        foreach ($dir in $($recursiveDirs| Select-Object -Unique)) {
             $dirIndex++
             Write-Progress -Activity "Building Recursive File List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             
