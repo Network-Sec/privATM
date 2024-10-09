@@ -1,7 +1,7 @@
 # privATM
 Yet Another PrivEsc &amp; User Enum Script
 
-We started working on a script, that can be used on real systems.
+*"Created in complete awareness, that anything from clean pentesting PrivEsc-Checklists over Hacktricks to brilliantly engineered, polyglot-like oneliners have existed to address all of these pathes, for over a decade.* - I mean, **we** were aware... 
 
 ## WIP - Work In Progress
 We already made good progress but are still far from what we'd like to deliver in the final version. 
