@@ -60,6 +60,32 @@ Of course, there are more ways to do this, but if you're lucky enough, this is p
 [+] D:\AI-Tools\Ollama
 [+] D:\AI-Tools\ComfyUI_windows_portable\piper-phonemize\lib
 [+] .
+
+[💀] Trying to find vulnerable services (unquoted etc.)
+[+] Service: GamingServices
+[*] Path: C:\Program Files\WindowsApps\Microsoft.GamingServices_24.93.2001.0_x64\GamingServices.exe
+[*] Potential Exploits: UNQUOTED_SERVICE_PATH, SPACE_IN_PATH
+[*] Writable Paths:
+[*] DLL Hijack Paths:
+[+] Has SERVICE_START permission: True
+[+] Has SERVICE_CHANGE_CONFIG permission: True
+------------------------------------
+[+] Service: GamingServicesNet
+[*] Path: C:\Program Files\WindowsApps\Microsoft.GamingServices_24.93.2001.0_x64\GamingServicesNet.exe
+[*] Potential Exploits: UNQUOTED_SERVICE_PATH, SPACE_IN_PATH
+[*] Writable Paths:
+[*] DLL Hijack Paths:
+[+] Has SERVICE_START permission: True
+[+] Has SERVICE_CHANGE_CONFIG permission: True
+------------------------------------
+[+] Service: WslInstaller
+[*] Path: C:\Program Files\WindowsApps\MicrosoftCorporationII.WindowsSubsystemForLinux_4.5.4.0_x64\wslinstaller.exe
+[*] Potential Exploits: UNQUOTED_SERVICE_PATH, SPACE_IN_PATH
+[*] Writable Paths:
+[*] DLL Hijack Paths:
+[+] Has SERVICE_START permission: True
+[+] Has SERVICE_CHANGE_CONFIG permission: True
+------------------------------------
 ```
 
 ## Bloodhound Data Collection
