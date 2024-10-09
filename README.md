@@ -50,8 +50,7 @@ Your selection: 1
 [+] You can try bypassing traverse checking to access files in restricted folders, where nested file or folder is accessible to user, e.g using Test-Path
 ```
 
-## Env Pathes
-Of course, there are more ways to do this, but if you're lucky enough, this is probably the quickest and easiest. 
+## Vulnerable Services
 
 ```
 [💀] Trying to find writable env-path before System32...
