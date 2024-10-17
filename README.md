@@ -196,6 +196,8 @@ Driver for Process Explorer, potential to allow privilege escalation by exploiti
 We carefully implemented a `credential discovery` logic, trying to balance speed, coverage and false-positives / true-positives rate. 
 
 Credential search is always a balancing act, we're happy with this config as it is, but it will **certainly** not match every scenario, machine and probably not CTFs. 
+
+**TODO:** As we search all $env:PATHs this will usually lead to directories like `C:\Windows\System32` and other system dirs being added to the search tree. Those will add a huge workload while yielding small chances for actual cred findings. We'll add a check to remove those dirs in a later version.
 ```
 Processing Files
 Processing file 254 of 2946 - C:\Users\testuser\bookmarks-2024-04-21.json - 1 MB
