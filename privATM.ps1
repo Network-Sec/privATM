@@ -2584,7 +2584,7 @@ function checkCreds {
             @{ type = 'filename'; match = '.ftpconfig'; name = 'Created by sftp-deployment for Atom, contains server details and credentials' }
         )
 
-        $excludeFilesOrDirs = 'cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|include|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|blender|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale|netcore|net.core|asp.net|jdk|native|wow64|amd64_|wowcore|wow.core' 
+        $excludeFilesOrDirs = 'windows|cache|node_modules|bower_components|lib|site-packages|dist-packages|vendor|packages|nuget|elasticsearch|maven|gradle|go|lib|include|yarn|composer|rbenv|gem|dependencies|pyenv|python|pycom|pycache|venv|pymakr|wordlist|seclist|extensions|conda|miniconda|sysinternals|blender|game|music|izotop|assetto|elastic|steamapps|resources|ableton|arturia|origin|nvidia|wikipedia|localization|locale|netcore|net.core|asp.net|jdk|native|wow64|amd64_|wowcore|wow.core' 
 
         $excludeExtensions  = @('*.exe', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.tiff', '*.tif', '*.psd', '*.xcf', '*.zip', '*.tar.gz', '*.ttf', '*.lock')
 
@@ -2626,7 +2626,7 @@ function checkCreds {
         
             Write-Progress -Activity "Building Recursive Directory List" -Status "Processing directory $dirIndex of $dirCount | $dir" -PercentComplete (($dirIndex / $dirCount) * 100)
             
-            $recursiveResult = Get-ChildItem -Path "$dir\*" -Recurse -Directory -ErrorAction SilentlyContinue | 
+            $recursiveResult = Get-ChildItem -Path "$dir\*" -Recurse -Directory -Force -ErrorAction SilentlyContinue | 
                 Where-Object { $_.FullName -notmatch $excludeFilesOrDirs }
             
             foreach ($subDir in $recursiveResult) {
