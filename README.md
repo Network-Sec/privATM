@@ -301,3 +301,5 @@ BlockedFileName   : msio64.sys
 Non-blocked kernel-mode drivers (.sys files) found on this system:
 1394ohci.sys 3ware.sys acpi.sys acpidev.sys acpiex.sys acpipagr.sys acpipmi.sys acpitime.sys acx01000.sys adp80xx.sys afd.sys afunix.sys ahcache.sys amdgpio2.sys amdgpio3.sys amdi2c.sys amdk8.sys amdpcidev.sys amdppm.sys amdpsp.sys amdsata.sys amdsbs.sys amdxata.sys applockerfltr.sys appvstrm.sys appvvemgr.sys appvvfs.sys arcsas.sys asio2.sys asio3.sys asussaio.sys asyncmac.sys atapi.sys asuswmiacpi.sys bxvbda.sys bam.sys basicdisplay.sys basicrender.sys bcmfn2.sys beep.sys bindflt.sys bomebus.sys bowser.sys btha2dp.sys 
 ```
+
+Understand that the script does **not** check, if driver blocking is actually enabled on the system, nor does it check, if the drivers are running. It downloads the list directly from MS and compares sys drivers found in the Windows drivers directory against.
