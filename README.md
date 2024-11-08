@@ -266,3 +266,6 @@ Line 1: MONGODB_URI=mongodb://testuser:IhAn3325JAnql_AIhn335a@127.0.0.1:27017/pr
 [?] If you're in a desktop session, should we display all findings in a new Desktop-Window (y/n)?
 ```
 When the search is finished, we offer the user to display results in a `Grid-View`, a Windows Desktop list-window that can be sorted and filtered.
+
+## enumSysDrivers.ps1
+is a - currently - standalone script that enumerates all sys / kernel drivers and compares them to the blocklists from Microsoft, then outputs both blocked / unblocked. 
