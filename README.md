@@ -269,3 +269,35 @@ When the search is finished, we offer the user to display results in a `Grid-Vie
 
 ## enumSysDrivers.ps1
 is a - currently - standalone script that enumerates all sys / kernel drivers and compares them to the blocklists from Microsoft, then outputs both blocked / unblocked. 
+
+```powershell
+> .\enumSysDrivers.ps1
+
+Downloading the Vulnerable Driver Blocklist ZIP...
+Total number of blocked drivers found: 127
+Enumerating installed kernel-mode drivers (.sys files)...
+Comparing installed drivers with the full blocklist...
+Found blocked kernel-mode drivers installed:
+
+
+DriverDisplayName : Anwendungs-ID-Treiber
+DriverPath        : C:\Windows\system32\drivers\appid.sys
+DriverDescription : Anwendungs-ID-Treiber
+DriverState       : Stopped
+BlockedFileName   : appid.sys
+
+DriverDisplayName : Microsoft Monitor-Klassenfunktionstreiber-Dienst
+DriverPath        : C:\Windows\system32\drivers\monitor.sys
+DriverDescription : Microsoft Monitor-Klassenfunktionstreiber-Dienst
+DriverState       : Running
+BlockedFileName   : monitor.sys
+
+DriverDisplayName : MSIO
+DriverPath        : \??\C:\Windows\system32\drivers\MsIo64.sys
+DriverDescription : MSIO
+DriverState       : Running
+BlockedFileName   : msio64.sys
+
+Non-blocked kernel-mode drivers (.sys files) found on this system:
+1394ohci.sys 3ware.sys acpi.sys acpidev.sys acpiex.sys acpipagr.sys acpipmi.sys acpitime.sys acx01000.sys adp80xx.sys afd.sys afunix.sys ahcache.sys amdgpio2.sys amdgpio3.sys amdi2c.sys amdk8.sys amdpcidev.sys amdppm.sys amdpsp.sys amdsata.sys amdsbs.sys amdxata.sys applockerfltr.sys appvstrm.sys appvvemgr.sys appvvfs.sys arcsas.sys asio2.sys asio3.sys asussaio.sys asyncmac.sys atapi.sys asuswmiacpi.sys bxvbda.sys bam.sys basicdisplay.sys basicrender.sys bcmfn2.sys beep.sys bindflt.sys bomebus.sys bowser.sys btha2dp.sys 
+```
