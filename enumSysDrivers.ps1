@@ -1,7 +1,7 @@
 # Set up URLs and paths
 $downloadUrl = "https://aka.ms/VulnerableDriverBlockList"
 $zipPath = "$env:TEMP\VulnerableDriverBlockList.zip"
-$extractPath = "C:\Windows\Temp\VulnerableDriverBlockList"
+$extractPath = "$env:TEMP\VulnerableDriverBlockList"
 
 # Download the ZIP file
 Write-Output "Downloading the Vulnerable Driver Blocklist ZIP..."
@@ -11,70 +11,55 @@ Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath
 Write-Output "Extracting ZIP contents to $extractPath..."
 Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
 
-# Verify if extracted content has an additional directory level
-$subDirectory = Get-ChildItem -Path $extractPath | Where-Object { $_.PSIsContainer } | Select-Object -First 1
-if ($subDirectory) {
-    $extractPath = $subDirectory.FullName  # Adjust path to the inner directory
-}
-
-# Check and list files in the adjusted extractPath
-Write-Output "Listing extracted files in adjusted path:"
+# List extracted files for debugging
+Write-Output "Listing extracted files:"
 Get-ChildItem -Path $extractPath | ForEach-Object { Write-Output $_.Name }
 
-# Define the path to the XML blocklist file
-$xmlAuditPath = Join-Path -Path $extractPath -ChildPath "SiPolicy_Audit.xml"
+# Initialize array to hold all blocked drivers across XML files
+$allBlockedDrivers = @()
 
-# Check if the XML file exists before proceeding
-if (-Not (Test-Path -Path $xmlAuditPath)) {
-    Write-Output "Error: XML file 'SiPolicy_Audit.xml' not found in extracted contents. Exiting script."
-    exit
-}
+# Process each XML file in the extracted directory
+$xmlFiles = Get-ChildItem -Path $extractPath -Filter "*.xml"
+foreach ($xmlFile in $xmlFiles) {
+    Write-Output "Processing blocklist from file: $($xmlFile.Name)"
+    [xml]$xmlContent = Get-Content -Path $xmlFile.FullName
 
-# Load XML content from the audit blocklist file
-[xml]$auditXml = Get-Content -Path $xmlAuditPath
-
-# Collect blocked driver details from the XML
-$blockedDrivers = @()
-foreach ($rule in $auditXml.SelectNodes("//FileRule")) {
-    if ($rule.FileName -like "*.sys") {
-        $blockedDrivers += @{
-            FileName = $rule.FileName.ToLower()
-            FileHash = $rule.FileHash
-            Publisher = $rule.Publisher
+    # Extract vulnerable .sys driver names from FileRule nodes
+    foreach ($rule in $xmlContent.SelectNodes("//FileRule")) {
+        if ($rule.FileName -like "*.sys") {
+            $allBlockedDrivers += $rule.FileName.ToLower()  # Collect only .sys names in lowercase
         }
     }
 }
 
-# Get list of installed kernel-mode drivers (.sys files) on the system
+# Debug output of all unique blocked drivers found in blocklists
+$allBlockedDrivers = $allBlockedDrivers | Sort-Object -Unique
+Write-Output "Blocked drivers (.sys files) from blocklist files:"
+$allBlockedDrivers | ForEach-Object { Write-Output $_ }
+
+# Enumerate installed kernel-mode drivers (.sys files)
 Write-Output "Enumerating installed kernel-mode drivers (.sys files)..."
 $installedDrivers = Get-WmiObject Win32_SystemDriver | Where-Object { $_.PathName -like "*.sys" } | Select-Object DisplayName, PathName, Description, State
 
-# Compare installed kernel-mode drivers with the blocklist
-Write-Output "Comparing installed kernel-mode drivers with the blocklist..."
+# Compare installed drivers with the blocklist
+Write-Output "Comparing installed drivers with the full blocklist..."
 $matches = @()
 $notBlockedDrivers = @()
 
 foreach ($installedDriver in $installedDrivers) {
-    $isBlocked = $false
     $driverFileName = [System.IO.Path]::GetFileName($installedDriver.PathName).ToLower()
-
-    foreach ($blockedDriver in $blockedDrivers) {
-        if ($driverFileName -eq $blockedDriver.FileName) {
-            $isBlocked = $true
-            $matches += [PSCustomObject]@{
-                DriverDisplayName = $installedDriver.DisplayName
-                DriverPath = $installedDriver.PathName
-                DriverDescription = $installedDriver.Description
-                DriverState = $installedDriver.State
-                BlockedFileName = $blockedDriver.FileName
-                Publisher = $blockedDriver.Publisher
-            }
-            break
+    
+    if ($allBlockedDrivers -contains $driverFileName) {
+        # Match found, add to matches list with details
+        $matches += [PSCustomObject]@{
+            DriverDisplayName = $installedDriver.DisplayName
+            DriverPath = $installedDriver.PathName
+            DriverDescription = $installedDriver.Description
+            DriverState = $installedDriver.State
+            BlockedFileName = $driverFileName
         }
-    }
-
-    if (-not $isBlocked) {
-        # Collect non-blocked .sys drivers for separate output
+    } else {
+        # No match, add to non-blocked list
         $notBlockedDrivers += $driverFileName
     }
 }
