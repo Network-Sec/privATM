@@ -3,39 +3,82 @@ $downloadUrl = "https://aka.ms/VulnerableDriverBlockList"
 $zipPath = "$env:TEMP\VulnerableDriverBlockList.zip"
 $extractPath = "$env:TEMP\VulnerableDriverBlockList"
 
+# _DEBUG_ flag to control debugging output
+$DEBUG_ = $false  # Set to $false for minimal output
+
 # Download the ZIP file
 Write-Output "Downloading the Vulnerable Driver Blocklist ZIP..."
 Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath
 
-# Extract the ZIP contents
-Write-Output "Extracting ZIP contents to $extractPath..."
-Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-
-# List extracted files for debugging
-Write-Output "Listing extracted files:"
-Get-ChildItem -Path $extractPath | ForEach-Object { Write-Output $_.Name }
+# List extracted files for debugging (recursive search)
+if ($DEBUG) {
+    Write-Output "Listing extracted files (including nested directories):"
+    Get-ChildItem -Path $extractPath -Recurse | ForEach-Object { Write-Output $_.FullName }
+}
 
 # Initialize array to hold all blocked drivers across XML files
 $allBlockedDrivers = @()
 
-# Process each XML file in the extracted directory
-$xmlFiles = Get-ChildItem -Path $extractPath -Filter "*.xml"
+# Process each XML file in the extracted directory (including nested subdirectories)
+$xmlFiles = Get-ChildItem -Path $extractPath -Recurse -Filter "*.xml"
 foreach ($xmlFile in $xmlFiles) {
-    Write-Output "Processing blocklist from file: $($xmlFile.Name)"
+    if ($DEBUG) {
+        Write-Output "Processing blocklist from file: $($xmlFile.Name)"
+    }
+
     [xml]$xmlContent = Get-Content -Path $xmlFile.FullName
 
-    # Extract vulnerable .sys driver names from FileRule nodes
-    foreach ($rule in $xmlContent.SelectNodes("//FileRule")) {
-        if ($rule.FileName -like "*.sys") {
-            $allBlockedDrivers += $rule.FileName.ToLower()  # Collect only .sys names in lowercase
+    # Define namespace manager to handle the XML namespace
+    $namespaceManager = New-Object System.Xml.XmlNamespaceManager($xmlContent.NameTable)
+    $namespaceManager.AddNamespace("sipolicy", "urn:schemas-microsoft-com:sipolicy")
+
+    if ($DEBUG) {
+        # Debug print to inspect the first 100 characters of XML content to check structure
+        Write-Output "XML Content Preview: $($xmlContent.OuterXml.Substring(0, 100))"
+    }
+
+    # Process Deny elements (for blocked .sys files)
+    $denyNodes = $xmlContent.SelectNodes("//sipolicy:SiPolicy/sipolicy:FileRules/sipolicy:Deny", $namespaceManager)
+    
+    if ($DEBUG) {
+        Write-Output  "Found $($denyNodes.Count) Deny nodes."
+    }
+
+    foreach ($deny in $denyNodes) {
+        if ($deny.FileName -like "*.sys") {
+            $allBlockedDrivers += $deny.FileName.ToLower()  # Collect only .sys names in lowercase
+        }
+    }
+
+    # Process FileAttrib elements (for files with attributes, potentially including .sys)
+    $attribNodes = $xmlContent.SelectNodes("//sipolicy:SiPolicy/sipolicy:FileRules/sipolicy:FileAttrib", $namespaceManager)
+
+    
+    if ($DEBUG) {
+        Write-Output "Found $($attribNodes.Count) FileAttrib nodes."
+    }
+
+    foreach ($attrib in $attribNodes) {
+        if ($attrib.FileName -like "*.sys") {
+            $allBlockedDrivers += $attrib.FileName.ToLower()  # Collect only .sys names in lowercase
         }
     }
 }
 
-# Debug output of all unique blocked drivers found in blocklists
+# Debug output of all unique blocked drivers found in blocklists (if debugging is enabled)
 $allBlockedDrivers = $allBlockedDrivers | Sort-Object -Unique
-Write-Output "Blocked drivers (.sys files) from blocklist files:"
-$allBlockedDrivers | ForEach-Object { Write-Output $_ }
+
+# Print blocked drivers in the desired format
+if ($DEBUG) {
+    Write-Output "Processing complete. Found blocked drivers:"
+    Write-Output "$($allBlockedDrivers -join ' ')"  # Join without newlines
+}
+
+Write-Output "Total number of blocked drivers found: $($allBlockedDrivers.Count)"
+if ($DEBUG_) {
+    Write-Output "Blocked drivers (.sys files) from blocklist files:"
+    $allBlockedDrivers | ForEach-Object { Write-Output $_ }
+}
 
 # Enumerate installed kernel-mode drivers (.sys files)
 Write-Output "Enumerating installed kernel-mode drivers (.sys files)..."
@@ -48,7 +91,7 @@ $notBlockedDrivers = @()
 
 foreach ($installedDriver in $installedDrivers) {
     $driverFileName = [System.IO.Path]::GetFileName($installedDriver.PathName).ToLower()
-    
+
     if ($allBlockedDrivers -contains $driverFileName) {
         # Match found, add to matches list with details
         $matches += [PSCustomObject]@{
@@ -66,15 +109,15 @@ foreach ($installedDriver in $installedDrivers) {
 
 # Display matched blocked drivers
 if ($matches.Count -gt 0) {
-    Write-Output "Found vulnerable kernel-mode drivers installed:"
-    $matches | Format-Table -AutoSize
+    Write-Output "Found blocked kernel-mode drivers installed:"
+    $matches 
 } else {
-    Write-Output "No vulnerable kernel-mode drivers found among installed drivers."
+    Write-Output "No blocked kernel-mode drivers found among installed drivers."
 }
 
 # Display non-blocked kernel-mode drivers
-Write-Output "Non-blocked kernel-mode drivers (.sys files):"
-$notBlockedDrivers | Sort-Object | Format-Table -AutoSize
+Write-Output "Non-blocked kernel-mode drivers (.sys files) found on this system:"
+Write-Output "$($notBlockedDrivers -join ' ')" 
 
 # Cleanup: Remove the downloaded and extracted files
 Remove-Item -Path $zipPath -Force
